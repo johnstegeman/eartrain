@@ -54,6 +54,7 @@ public struct ContentView: View {
         case .intervals:      ExerciseView()
         case .contour:        ContourView()
         case .identification: IdentificationView()
+        case .settings:       SettingsView()
         }
     }
 }
@@ -64,12 +65,14 @@ public enum AppMode: CaseIterable {
     case intervals
     case contour
     case identification
+    case settings
 
     public var label: String {
         switch self {
         case .intervals:      return "Intervals"
         case .contour:        return "Contour"
         case .identification: return "Identify"
+        case .settings:       return "Settings"
         }
     }
 }

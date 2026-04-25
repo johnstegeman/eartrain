@@ -73,7 +73,7 @@ public final class ExerciseViewModel: ObservableObject {
 
         Task {
             let targetHz = interval.targetHz(rootHz: rootHz)
-            await audio.intervalPlayer.playInterval(rootHz: rootHz, intervalHz: targetHz)
+            await audio.playInterval(rootHz: rootHz, intervalHz: targetHz)
             // 500ms gate prevents sine tone from self-triggering the detector.
             try? await Task.sleep(for: .milliseconds(500))
             beginListening(for: interval)
@@ -85,7 +85,7 @@ public final class ExerciseViewModel: ObservableObject {
         phase = .playing
         Task {
             let targetHz = currentInterval.targetHz(rootHz: rootHz)
-            await audio.intervalPlayer.playInterval(rootHz: rootHz, intervalHz: targetHz)
+            await audio.playInterval(rootHz: rootHz, intervalHz: targetHz)
             try? await Task.sleep(for: .milliseconds(500))
             beginListening(for: currentInterval)
         }

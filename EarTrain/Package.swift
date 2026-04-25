@@ -38,7 +38,8 @@ let package = Package(
             dependencies: [
                 .product(name: "AudioKit", package: "AudioKit"),
             ],
-            path: "Sources/EarTrainLib"
+            path: "Sources/EarTrainLib",
+            resources: [.copy("Samples")]
         ),
 
         // Tests

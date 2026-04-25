@@ -92,7 +92,7 @@ public final class IdentificationViewModel: ObservableObject {
         guard case .awaitingAnswer = phase else { return }
         phase = .playingQuiz
         Task {
-            await audio.intervalPlayer.playInterval(
+            await audio.playInterval(
                 rootHz: quizRootHz,
                 intervalHz: quizInterval.targetHz(rootHz: quizRootHz)
             )
@@ -118,7 +118,7 @@ public final class IdentificationViewModel: ObservableObject {
         let root = teachRootHz
         let interval = focusInterval
         Task {
-            await audio.intervalPlayer.playInterval(
+            await audio.playInterval(
                 rootHz: root,
                 intervalHz: interval.targetHz(rootHz: root)
             )
@@ -139,7 +139,7 @@ public final class IdentificationViewModel: ObservableObject {
         let root = quizRootHz
         let quiz = quizInterval
         Task {
-            await audio.intervalPlayer.playInterval(
+            await audio.playInterval(
                 rootHz: root,
                 intervalHz: quiz.targetHz(rootHz: root)
             )

@@ -3,7 +3,10 @@ import AVFoundation
 import SwiftUI
 
 /// Manages the shared AVAudioEngine — mic input tap (pitch detection)
-/// and IntervalPlayer (tone output) on the same engine instance.
+/// and tone/sample output on the same engine instance.
+///
+/// Tone output is routed through either `IntervalPlayer` (sine wave) or
+/// `SamplePlayer` (guitar WAV samples) based on the current `timbre` setting.
 ///
 /// All published properties update on the main actor.
 @MainActor
@@ -17,9 +20,18 @@ public final class AudioEngineManager: ObservableObject {
     @Published public var isRunning = false
     @Published public var engineError: String?
 
+    /// Active timbre. Persisted in UserDefaults. Changing this reloads sample buffers.
+    @Published public var timbre: GuitarTimbre = GuitarTimbre.persisted {
+        didSet {
+            GuitarTimbre.persisted = timbre
+            samplePlayer.prepare(timbre: timbre)
+        }
+    }
+
     // MARK: - Sub-systems
 
     public let intervalPlayer = IntervalPlayer()
+    public let samplePlayer   = SamplePlayer()
 
     /// CI Bluetooth keep-alive is active whenever the engine is running.
     /// AVAudioEngine keeps the macOS audio session alive even when outputting
@@ -78,15 +90,48 @@ public final class AudioEngineManager: ObservableObject {
 
         // --- Interval tone output (must attach before engine.start()) ---
         intervalPlayer.attach(to: eng, sampleRate: sampleRate)
+        samplePlayer.attach(to: eng)
 
         do {
             try eng.start()
             self.engine = eng
             self.detector = det
             isRunning = true
+            // Load samples for the current timbre (no-op for .sine).
+            samplePlayer.prepare(timbre: timbre)
         } catch {
             engineError = "Couldn't start audio engine: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Timbre-routed playback
+
+    /// Play root note then interval note, routing to sine or sample player.
+    /// Reads the persisted timbre at call time so a settings change takes
+    /// effect on the very next interval without restarting the engine.
+    public func playInterval(rootHz: Float, intervalHz: Float,
+                              noteDuration: TimeInterval = 1.5,
+                              gap: TimeInterval = 0.4) async {
+        let active = GuitarTimbre.persisted
+        // Sync in-memory state and reload samples if the setting changed.
+        if active != timbre {
+            timbre = active
+        }
+        if active == .sine {
+            await intervalPlayer.playInterval(rootHz: rootHz, intervalHz: intervalHz,
+                                              noteDuration: noteDuration, gap: gap)
+        } else {
+            let rootMidi     = NoteConverter.midiNote(fromHz: rootHz)
+            let intervalMidi = NoteConverter.midiNote(fromHz: intervalHz)
+            await samplePlayer.playInterval(rootMidi: rootMidi, intervalMidi: intervalMidi,
+                                            noteDuration: noteDuration, gap: gap)
+        }
+    }
+
+    /// Stop all audio output (both players).
+    public func stopPlayback() {
+        intervalPlayer.stop()
+        samplePlayer.stop()
     }
 
     private func applyKeepAlive() {
@@ -100,7 +145,7 @@ public final class AudioEngineManager: ObservableObject {
     }
 
     public func stop() {
-        intervalPlayer.stop()
+        stopPlayback()
         engine?.inputNode.removeTap(onBus: 0)
         engine?.stop()
         engine = nil

@@ -82,7 +82,7 @@ public final class ContourViewModel: ObservableObject {
         correctContour = contour
 
         Task {
-            await audio.intervalPlayer.playInterval(
+            await audio.playInterval(
                 rootHz: rootHz, intervalHz: secondHz,
                 noteDuration: 1.2, gap: 0.35
             )
@@ -94,7 +94,7 @@ public final class ContourViewModel: ObservableObject {
         guard case .awaitingAnswer = phase else { return }
         phase = .playing
         Task {
-            await audio.intervalPlayer.playInterval(
+            await audio.playInterval(
                 rootHz: rootHz, intervalHz: secondHz,
                 noteDuration: 1.2, gap: 0.35
             )
