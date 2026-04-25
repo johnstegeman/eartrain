@@ -287,10 +287,15 @@ register"). Then: "Start your first session" CTA. Makes the calibration feel mea
 - "Root note" in Settings is fixed for the session (user-selected before starting); not randomized
   per exercise. This keeps the exercise context stable and simplifies session setup.
 - Interval set: M2, m3, M3, P4, P5, M6, m7, P8 (all pentatonic scale intervals)
-- Register buckets (by guitar fretboard range):
-  - Low: E2–B3 (open strings to 4th string 9th fret)
-  - Mid: C4–B4 (roughly 5th position area)
-  - High: C5 and above
+- Register buckets: configurable via `RegisterBuckets` struct; thresholds stored in
+  user settings. Default (`RegisterBuckets.guitarDefault`):
+  - Low:  E2–E3  (82–175 Hz)  — bass strings (6th/5th string area)
+  - Mid:  F3–A4  (175–440 Hz) — main playing range; A4 (5th fret high E) is
+                                 the practical root ceiling: P5 → E5 (12th fret) ✓
+  - High: A#4+   (466+ Hz)    — upper register; m3/M3/P4 practical only
+  Rationale: A4 root keeps the full interval set reachable — P8 lands at A5
+  (17th fret, accessible on most electrics). The original spec's C5+ high bucket
+  was too narrow; too few intervals are practical above that root.
 - Confusion matrix: logs `(interval, register) → [Result]` for every attempt
 - Progress tracking: session-by-session accuracy per interval and register; trend line
   visible in Progress view so improvement over time is clearly visible
