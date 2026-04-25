@@ -473,6 +473,133 @@ Fretboard SVG scales proportionally.
 - "Honest" mode: which notes were in vs. out, highlights patterns
 - "Brutally honest" toggle: no softening, just truth
 
+## Config-Driven Lesson Plan Architecture
+
+### Overview
+
+Rather than hardcoding exercise sequences, the app reads lesson plans from `.etplan` files — JSON documents that specify which exercises to run, in what order, with what parameters, and what "pass" means for each step. Audiologists, researchers, and guitar teachers can author plans in a text editor and distribute them by email. Patients double-click the file; the app loads it and starts.
+
+### ExercisePrimitive Protocol
+
+All exercise types (`ContourViewModel`, `IdentificationViewModel`, `ExerciseViewModel`) conform to a shared Swift protocol. This lets `LessonRunner` drive any exercise type without knowing which one it is.
+
+```swift
+public protocol ExercisePrimitive: AnyObject {
+    /// Configure the primitive from a plan step's parameters.
+    func configure(step: LessonStep, audio: AudioEngineManager)
+    /// Run the primitive until the step's completion criterion is met.
+    /// Returns .passed or .failed.
+    func run() async -> StepOutcome
+    /// Clean up (cancel tasks, reset state). Called between steps.
+    func reset()
+}
+
+public enum StepOutcome { case passed, failed }
+```
+
+### LessonRunner
+
+`LessonRunner` owns the `AudioEngineManager` and drives steps sequentially:
+
+1. Load `LessonPlan` from `.etplan` file
+2. For each step in order:
+   a. Instantiate the correct primitive for `step.type`
+   b. Call `primitive.configure(step:audio:)` — injects the shared audio engine
+   c. Call `await primitive.run()` — blocks until the step's completion criterion is met
+   d. On `.passed`: advance to next step (or `onPass` target if specified)
+   e. On `.failed`: go to `onFail` target (default: repeat current step)
+3. On final step completion: mark plan done, show end screen
+
+### .etplan File Type
+
+**UTI registration** (Info.plist):
+- Type identifier: `com.eartrain.etplan`
+- File extension: `.etplan`
+- Conforms to: `public.data`
+- Description: "EarTrain CI Lesson Plan"
+
+**File open handling**: `.onOpenURL` modifier on the SwiftUI `WindowGroup` scene (not `AppDelegate` — that method does not fire in SwiftUI lifecycle apps):
+
+```swift
+WindowGroup {
+    ContentView()
+}
+.onOpenURL { url in
+    lessonStore.load(from: url)
+}
+```
+
+**Plan preview modal**: when a `.etplan` file is opened, show a modal before starting:
+- Plan name, author, description
+- Step count and type summary ("3 steps: Contour → Identification → Playback")
+- Start / Cancel buttons
+
+**Error handling**: if the file fails to parse (bad JSON, unknown version), show an alert with the filename. Stay on the currently-active plan. Never silently ignore failures.
+
+**Version migration**: the `version` field is checked on load. If `version > 1` (current max), show: "This plan requires a newer version of EarTrain CI." Unknown JSON fields are ignored (Codable default behavior).
+
+### Step Schema Reference
+
+See `.etplan` JSON schema in the CEO plan. Key fields:
+
+| Field | Type | Applies to | Meaning |
+|-------|------|-----------|---------|
+| `type` | String | all | `"contour"`, `"identification"`, `"playback"` |
+| `trials` | Int | all | Number of attempts (fixed) or window size for passRate |
+| `passRate` | Float | all | Advance when correct/total ≥ value over last `trials` |
+| `streakToAdvance` | Int | all | Advance after N consecutive correct (alternative to passRate) |
+| `onPass` | String | all | `"next"` (default) |
+| `onFail` | String | all | `"repeat"` (default) |
+| `semitoneRange` | [Int, Int] | contour | Min/max semitone gap for two-note contour pairs |
+| `focusIntervals` | [String] | identification | Intervals to teach/quiz, e.g. `["P5", "P8"]` |
+| `foilStrategy` | String | identification | `"distant"` / `"adjacent"` / `"random"` |
+| `intervals` | [String] | playback | Interval set for playback mode |
+| `registers` | [String] | playback | `"low"`, `"mid"`, `"high"` — restrict root range |
+
+Advancement: use exactly one of `passRate` or `streakToAdvance`. Omit both for fixed trial count.
+
+### Audiologist / Teacher View
+
+A separate window (File → "Open Session Data…") for reviewing a patient's data:
+
+1. **Open**: `NSOpenPanel` to select a folder. Patient zips and emails their `~/Library/Application Support/EarTrainCI/` folder; audiologist unzips and opens it via this dialog. Security-scoped bookmarks used for access.
+2. **Confusion matrix**: interval × register heatmap showing error rate per cell, built from `SessionLogger.CumulativeStats.matrix`. Each cell shows correct/total and error rate color-coded (green → red).
+3. **Export**:
+   - CSV: one row per trial across all session files (timestamp, interval, register, rootHz, detectedHz, result)
+   - JSON bundle: `cumulative.json` + all `sessions/*.json` files zipped
+4. **Read-only**. No session data can be modified through this view.
+
+### Confusion Matrix Visualization (Patient View)
+
+In the main app's Progress tab, an interval × register heatmap showing the patient's own confusion patterns:
+- Same cell structure as the audiologist view (interval rows × register columns)
+- Color: green = low error rate, amber = moderate, red = high
+- Cells with < 5 trials shown in muted style with "Not enough data" tooltip
+- Tap/click a cell for drill-down: trial count, accuracy trend, "Drill This" button
+
+### Bundled Starter Curricula
+
+Two `.etplan` files bundled in the app's Resources:
+- `beginner-ci.etplan`: Contour (large intervals, gentle ramp) → Identification (P5/P8 focus)
+- `intermediate.etplan`: Full pentatonic interval set, all three modes
+
+Loaded into a "Starter Plans" section in the plan picker on first launch.
+
+### Drill My Misses
+
+A built-in dynamic plan (not a static `.etplan` file) that reads `cumulative.json` and generates a focused session:
+
+- **Eligibility**: bucket must have ≥ 5 trials and error rate > 30%
+- **Session composition**: top N worst (interval, register) pairs, equal split between Identification and Playback steps
+- **Unavailable state**: greyed out with tooltip "Available after 5 attempts in each bucket (N/24 ready)"
+- Effort: L (reads live confusion data, generates step parameters programmatically)
+
+### Research Export
+
+From the audiologist view's Export button:
+- **CSV**: one row per trial — `timestamp,session_id,interval,register,rootHz,detectedHz,result` — ready for import into R or Python
+- **JSON bundle**: raw session files + cumulative summary, for reproducible analysis
+
 ## Technical Architecture
 
 **Platform targets:** macOS 13 (Ventura) minimum. Swift 5.9+. AudioKit 5.x via Swift Package Manager.
@@ -589,11 +716,10 @@ EarTrain (macOS SwiftUI app)
 
 Two researchers with existing relationships who could meaningfully shape this project.
 
-### Dr. Charles Limb — UCSF (https://ohns.ucsf.edu/charles-limb)
-Cochlear implant surgeon, musician, and researcher. His lab focuses specifically on music
-perception in CI users — one of the most prominent voices in this space. Prior email contact.
+### Researcher A — CI surgeon, musician, and researcher
+Focuses specifically on music perception in CI users. Prior email contact.
 
-**How he could help:**
+**How they could help:**
 - Validate or critique the training methodology against current clinical knowledge
 - Point to unpublished findings or ongoing research relevant to interval training
 - Identify whether the "confusion matrix as personal CI frequency map" long-term vision has
@@ -601,28 +727,26 @@ perception in CI users — one of the most prominent voices in this space. Prior
 - Lending credibility if you ever share the app with CI researchers or clinicians
 
 **Suggested approach:** Share the design doc (Research Foundation section in particular) and ask
-whether the training design is consistent with what his lab sees clinically. Specific question:
+whether the training design is consistent with what their lab sees clinically. Specific question:
 does adaptive interval drilling based on confusion patterns have precedent in CI rehab, or is
 this a novel approach?
 
-### Dr. Stacey Lim — Central Michigan University (https://www.cmich.edu/people/STACEY-R-LIM)
-Speech-language pathologist focused on auditory rehabilitation. CI recipient herself. Met and
-spoken with her multiple times — local contact.
+### Researcher B — Speech-language pathologist, auditory rehabilitation
+CI recipient. Local contact — met and spoken with multiple times.
 
-**How she could help:**
-- Co-design the training exercises from a clinical rehab perspective (she knows what works)
+**How they could help:**
+- Co-design the training exercises from a clinical rehab perspective
 - Early tester with both professional feedback (rehab specialist) and lived experience (CI user)
 - Validate the onboarding calibration approach against established auditory assessment methods
-- Potential path to other CI users who'd want to use the app (her patient or research population)
+- Potential path to other CI users who'd want to use the app
 - Clinical validation if you want to eventually share the app in a rehab context
 
 **Suggested approach:** This is the highest-leverage conversation to have early. Before writing
 code, share the problem statement and Phase 0/Phase 1 design and ask: "Does this match what your
 patients actually struggle with, and does the training approach reflect what works in your
-practice?" Her answer will catch gaps that no amount of literature review will find. She is also
-the most natural first beta user outside yourself.
+practice?" Their answer will catch gaps that no amount of literature review will find.
 
-**Priority:** Talk to Dr. Lim before finalizing the Phase 0 calibration design. Her clinical
+**Priority:** Talk to Researcher B before finalizing the Phase 0 calibration design. Their clinical
 experience with CI auditory assessment may suggest a better or more validated approach to
 seeding the confusion matrix than the one currently in the doc.
 
