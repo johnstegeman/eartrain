@@ -199,6 +199,58 @@ background queue. Toggleable in Settings.
 
 ## Feature Roadmap
 
+### Phase 0 — Tuner
+
+A simple chromatic tuner available before every session. Guitar must be in tune for the
+app's pitch grading to be accurate — an out-of-tune guitar will be graded as wrong even
+when the user plays the correct interval.
+
+- Displays: detected note name, Hz readout, cents deviation needle (±50 cents, center = in tune)
+- Visual: needle/bar; green = within ±10 cents, amber = ±10–25 cents, red = >±25 cents
+- Infrastructure already built: `NoteConverter.centsDeviation(fromHz:)` + live `AudioEngineManager`
+- Lives in the sidebar nav as its own view (not a mode of ExerciseView)
+- Nav order: **Tune → Practice → Progress → Settings**
+
+### Phase 0 — Contour Mode ("Higher, Lower, or Same?")
+
+The most basic possible ear training — melodic contour discrimination. For users who are
+just getting started and don't yet have reliable interval perception.
+
+**Exercise loop:**
+1. App plays two notes sequentially
+2. User taps: **Higher / Lower / Same**
+3. Immediate feedback; next pair
+
+**Why this matters for CI users:** Melodic contour (up/down) is consistently the easiest
+pitch-discrimination task for CI users — it's the baseline used in published CI training
+research before introducing interval size. Some users may find even this challenging in
+certain registers. Starting here meets every user where they actually are.
+
+**Progression:** Once accuracy exceeds a threshold (e.g. 80% over 20 trials), the app
+suggests moving to Identification Mode. The contour response also gives an early signal
+about which registers are most reliable for a given user.
+
+### Phase 0 — Identification Mode ("Is this a m3?")
+
+Some users — particularly CI users new to interval training — need to learn what intervals
+*sound like* before they can play them back. This mode is listening-only, no guitar required.
+
+**Exercise loop:**
+1. App plays two notes (root + interval) as sine tones
+2. User sees the interval name on screen (e.g. "Minor 3rd")
+3. App plays it again with a label: "This is a Minor 3rd"
+4. Then presents: "Is this a Minor 3rd? **Yes / No**" and plays a new pair
+5. No wrong answer punishment — just immediate confirmation and next trial
+
+**Design rationale:** Users who have never consciously heard a m3 cannot play one back
+reliably. Identification training builds the perceptual category first. This is validated
+by the Phase 0 calibration research — the app must meet users where they are, not assume
+prior ear training.
+
+**When to use:** On first launch (or when user selects "Start with identification" in
+onboarding). Also available as a standalone mode for any session ("I want to review what
+intervals sound like before drilling").
+
 ### Phase 0 — Onboarding Assessment (first launch only)
 
 New users do a short diagnostic before any drills. Goal: seed the confusion matrix with enough
@@ -420,20 +472,26 @@ Fretboard SVG scales proportionally.
 
 **Platform targets:** macOS 13 (Ventura) minimum. Swift 5.9+. AudioKit 5.x via Swift Package Manager.
 
+**Implementation note (updated during build):** `SoundpipeAudioKit` (which provides `PitchTap`)
+has a C/C++ interop incompatibility with Swift 6.3's stricter Clang. Pitch detection is
+implemented using normalized autocorrelation with parabolic interpolation via Accelerate/vDSP
+(`PitchDetector.swift`). This is actually a better fit for guitar because autocorrelation finds
+the fundamental period regardless of harmonic strength, whereas FFT peak-picking can lock onto
+overtones on low strings. AudioKit is retained for `SineOscillator` playback (step 4+).
+
 ```
 EarTrain (macOS SwiftUI app)
-├── Audio Engine (AudioKit — single AVAudioEngine instance)
-│   ├── AmplitudeTracker — RMS amplitude gate for onset detection
-│   ├── PitchTap — continuous pitch polling (fundamental frequency, ~93ms/frame)
-│   ├── SineOscillator — interval/melody playback (pure tones, better for CI)
-│   └── Silence mixer node — 0-amplitude Mixer in AudioKit graph for CI Bluetooth keep-alive
-│       (NOT a separate AVAudioEngine — AudioKit owns the engine; silence node lives in its graph)
+├── Audio Engine
+│   ├── AVAudioEngine (direct) — mic input capture + installTap for pitch detection
+│   ├── PitchDetector (Accelerate/vDSP) — normalized autocorrelation, ~93ms/frame at 4096 samples
+│   ├── AudioKit SineOscillator — interval/melody playback (pure tones, better for CI)
+│   └── AVAudioEngine output node — 0-amplitude buffer for CI Bluetooth keep-alive
 ├── Note Detection Pipeline (gate approach)
-│   ├── Onset: AmplitudeTracker crosses threshold (-40dBFS → -20dBFS) → start collecting PitchTap readings
-│   ├── Stability: N=3 consecutive PitchTap readings within 25 cents → lock pitch, grade note
+│   ├── Onset: RMS amplitude gate (vDSP_rmsqv) → start collecting PitchDetector readings
+│   ├── Stability: N=3 consecutive readings within 25 cents → lock pitch, grade note
 │   ├── Reset: amplitude drops below onset threshold → reset gate, ready for next note
-│   ├── Confidence: PitchTap confidence < 0.9 → discard frame (don't count toward N=3)
-│   └── No-read: if confidence < 0.9 for 10+ consecutive frames → show "couldn't detect pitch, try again"
+│   ├── Confidence: autocorrelation peak < 0.5 → discard frame (don't count toward N=3)
+│   └── No-read: if confidence < threshold for 10+ consecutive frames → show "couldn't detect pitch, try again"
 ├── Exercise Engine
 │   ├── IntervalExercise — generates root + target interval, evaluates response
 │   │   ├── Result enum (priority order — check in this sequence):
@@ -457,7 +515,8 @@ EarTrain (macOS SwiftUI app)
 │       ├── sessions/ — one file per practice session (includes schemaVersion: Int)
 │       └── cumulative.json — aggregated confusion matrix + progress (includes schemaVersion: Int)
 │           (schema versioning added now; migration needed if Result enum gains new cases)
-└── UI (SwiftUI) — 7 screens
+└── UI (SwiftUI) — 8 screens
+    ├── TunerView — chromatic tuner; cents deviation needle; pre-session utility
     ├── HomeView — start session, quick stats, "Drill My Misses" shortcut
     ├── SessionStartSheet — duration picker + mode toggle (modal over HomeView)
     ├── ExerciseView — active practice: play interval, listen, get feedback
@@ -470,17 +529,29 @@ EarTrain (macOS SwiftUI app)
 
 ## Open Questions
 
-1. **Pitch detection accuracy on low guitar strings**: Guitar has complex harmonics. `PitchTap`
-   can be confused by strong overtones on low strings (E2, A2). Mitigation: set a minimum
-   confidence threshold (e.g., 0.9) and require pitch stability across N consecutive frames
-   before confirming a note. If this proves unreliable, `aubio` (via a Swift bridge or a
-   lightweight Python sidecar) is a fallback with better guitar-optimized fundamental extraction.
+1. **Pitch detection accuracy on low guitar strings**: Resolved in implementation — normalized
+   autocorrelation (`PitchDetector.swift`) finds the fundamental period directly and is not
+   confused by strong overtones on low strings (E2, A2). Parabolic interpolation gives sub-sample
+   period accuracy. Confidence threshold (0.5 default) discards frames with weak signal. Requires
+   real-world validation on the actual guitar/mic setup.
 2. **Bent notes**: Pitch bending produces a continuous glide. For Phase 1 (interval training),
    bending isn't required — the user plays discrete notes. For Phase 3+ (blues licks), the app
    will need to detect the peak pitch of a bend or track the pitch contour. Deferred to Phase 3.
 3. **CI processor variants**: Won't do in MVP. The confusion matrix and drill logic work for any
    CI user. Processor-specific customization (Cochlear vs. MED-EL vs. Advanced Bionics channel
    mapping) is a potential future enhancement but not required for usefulness.
+4. **Timbre selection** (sine → acoustic guitar → clean electric → overdriven electric): Users
+   should be able to progress from the research-ideal pure sine tone toward real-world guitar
+   timbres as their training advances. Two implementation paths under consideration:
+   - **Karplus-Strong synthesis**: physically-modelled plucked string, no asset files, clean
+     electric comes naturally, distortion via soft-clip waveshaper. Prototype needed to evaluate
+     sound quality before committing.
+   - **Bundled samples**: FluidR3_GM soundfont (CC-BY 3.0) has acoustic steel, clean electric,
+     overdriven, and distortion guitar. Requires extracting per-note WAV files from the SF2 and
+     bundling ~20–40 samples per timbre; pitch-shifting fills the gaps. More realistic sound,
+     more asset management work.
+   Decision pending: build Karplus-Strong prototype first, compare against FluidR3_GM samples,
+   then choose.
 
 ## Success Criteria
 
