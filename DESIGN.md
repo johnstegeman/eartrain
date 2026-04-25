@@ -734,18 +734,33 @@ EarTrain (macOS SwiftUI app)
 3. **CI processor variants**: Won't do in MVP. The confusion matrix and drill logic work for any
    CI user. Processor-specific customization (Cochlear vs. MED-EL vs. Advanced Bionics channel
    mapping) is a potential future enhancement but not required for usefulness.
-4. **Timbre selection** (sine → acoustic guitar → clean electric → overdriven electric): Users
-   should be able to progress from the research-ideal pure sine tone toward real-world guitar
-   timbres as their training advances. Two implementation paths under consideration:
-   - **Karplus-Strong synthesis**: physically-modelled plucked string, no asset files, clean
-     electric comes naturally, distortion via soft-clip waveshaper. Prototype needed to evaluate
-     sound quality before committing.
-   - **Bundled samples**: FluidR3_GM soundfont (CC-BY 3.0) has acoustic steel, clean electric,
-     overdriven, and distortion guitar. Requires extracting per-note WAV files from the SF2 and
-     bundling ~20–40 samples per timbre; pitch-shifting fills the gaps. More realistic sound,
-     more asset management work.
-   Decision pending: build Karplus-Strong prototype first, compare against FluidR3_GM samples,
-   then choose.
+4. **Timbre selection — RESOLVED: bundled WAV samples from FluidR3_GM.**
+   Pure sine waves are hard to process for some CI users (confirmed by user testing). Guitar
+   timbres provide additional harmonic cues beyond the fundamental that improve interval
+   discrimination. This overrides the research recommendation for pure tones — if the stimulus
+   can't be discriminated, the training doesn't work.
+
+   **Chosen approach:** Per-note WAV samples extracted from FluidR3_GM.sf2 (CC-BY 3.0 license).
+   Three timbres: Acoustic Steel (GM #26), Electric Clean (GM #28), Overdriven (GM #30).
+   MIDI range: 40–81 (E2–A5), one file per semitone. 42 notes × 3 timbres = 126 WAV files, ~3–8 MB total.
+
+   **Extraction:** `scripts/extract_guitar_samples.py` — run once offline, output goes to
+   `EarTrain/Resources/Samples/`. Requires `fluidsynth` + `pyfluidsynth`.
+
+   **App implementation:** `SamplePlayer` class (replacing `IntervalPlayer`'s sine-wave path):
+   - Loads all WAV files as `AVAudioPCMBuffer` at startup (~5 MB, fast to load)
+   - Uses `AVAudioPlayerNode` attached to the shared `AVAudioEngine`
+   - `play(midiNote:timbre:duration:)` plays the buffer for the nearest semitone
+   - `playInterval(rootMidi:intervalMidi:timbre:)` sequences root + interval note
+   - Sine wave path kept in `IntervalPlayer` as the fallback (used when no samples loaded)
+   - Timbre is user-selectable in Settings: Sine / Acoustic / Clean Electric / Overdrive
+   - Default: Acoustic Steel (most natural for interval training)
+
+   **MIDI note conversion:** `NoteConverter.midiNote(fromHz:)` (static, rounds to nearest semitone).
+   ViewModels continue to work in Hz; `SamplePlayer` converts internally.
+
+   **Attribution:** FluidR3_GM is CC-BY 3.0. Add to app's About screen:
+   "Guitar samples from FluidR3_GM soundfont (CC-BY 3.0, Frank Wen / MuseScore)."
 
 ## Success Criteria
 
