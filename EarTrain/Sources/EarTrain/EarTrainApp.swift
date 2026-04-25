@@ -1,4 +1,5 @@
 import SwiftUI
+import EarTrainLib
 
 @main
 struct EarTrainApp: App {
