@@ -214,6 +214,11 @@ data to start "Drill My Misses" immediately and avoid starting at the wrong diff
 - User can skip and start from scratch (app will just need more trials before Drill My Misses kicks in)
 - Assessment runs once at first launch; can be re-run from Settings ("Reset & recalibrate")
 
+### Phase 0 — Onboarding completion state
+After the 48-question calibration, show a "Here's what we learned" summary screen with the
+top 2-3 identified confusion patterns (e.g., "Your CI tends to blur m3 and M3 in the low
+register"). Then: "Start your first session" CTA. Makes the calibration feel meaningful.
+
 ### Phase 1 — MVP: Interval Trainer
 - App plays two notes (root + interval) using pure sine waves (cleaner for CI perception)
 - User plays the interval back on guitar via mic/audio interface
@@ -243,13 +248,129 @@ data to start "Drill My Misses" immediately and avoid starting at the wrong diff
   user-toggleable in Settings, on by default
 - Data persistence: JSON files in app support directory (one file per session + cumulative)
 - Settings: root note, active interval set, register range, input device selection,
-  CI keep-alive toggle
+  CI keep-alive toggle, fretboard hint display (on/off + detail level), pitch tolerance,
+  audio buffer size (Advanced), feedback delay (correct: 2s, wrong: 4s, configurable)
+
+### Phase 1 — Interaction Design (hands-free practice loop)
+
+**Core loop is fully hands-free. User holds guitar throughout a session.**
+
+- **Input gate**: pitch detection is disabled while the interval tone is playing. Detection
+  resumes 500ms after playback ends to prevent the sine tone from self-triggering.
+- **Feedback delivery**:
+  1. App plays interval as sine tones (user taps ▶ or presses Return)
+  2. User plays the interval on guitar
+  3. Gate approach: onset detected → N=3 PitchTap frames stable → grade note
+  4. Audio cue plays immediately through CI stream:
+     - Correct: ascending major triad (short, pleasant)
+     - Close: single neutral tone
+     - Wrong: descending minor second (distinctive, not punishing)
+     - OctaveDisplaced: correct tone pattern but pitch-shifted down one octave
+  5. Inline feedback appears showing result + what was played
+  6. App auto-advances after adaptive delay: 2s (correct/close) or 4s (wrong/octaveDisplaced)
+  7. Spacebar skips the delay and advances immediately (keyboard users)
+- **Wrong feedback UX**: on `wrong` and `octaveDisplaced` results, the fretboard shows
+  BOTH the target note and what was detected — two highlighted dots, different colors.
+  Gives spatial/kinesthetic reference alongside the audio explanation.
+- **Audio interruptions** (FaceTime, notification, other app): session pauses, banner
+  displays "Audio interrupted — press Return to resume." Session state preserved, no data
+  lost. User resumes explicitly.
+- **Session pause**: Escape key pauses the session. Same banner UI as interruption.
+
+### Phase 1 — Fretboard Position Hints
+
+- **Optional**: toggled on/off in Settings and in ExerciseView header (quick access)
+- **Detail levels** (configurable in Settings):
+  - "Primary position only": shows one optimal fret position for the target note
+  - "All positions": shows the primary position + 1-2 alternate positions (dashed outline)
+  - "Off": fretboard hidden
+- **When shown**: displays root note (blue dot) and target note (amber dot) with finger
+  numbers. Alternate positions shown in dashed amber at reduced opacity.
+- **Progression logic**: future versions can auto-reduce hints as accuracy improves in a
+  bucket (e.g., turn off after 3 consecutive correct in the same bucket). Not in Phase 1.
 
 ### Phase 2 — Melody Echo
 - App plays a short melody (3-8 notes) in a chosen key
 - User plays it back on guitar
 - Note-by-note comparison: which notes were right, which were wrong, which were close
 - Builds on the same pitch detection + register bucketing from Phase 1
+
+## UI Design System
+
+### Colors (SwiftUI Color assets)
+All dark-mode only in Phase 1. Light mode is a future enhancement.
+
+| Token | Hex | Usage |
+|-------|-----|-------|
+| `bg` | `#1a1a1a` | App background |
+| `surface` | `#232323` | Cards, panels |
+| `surfaceRaised` | `#2a2a2a` | Secondary elements, hover |
+| `border` | `#2d2d2d` | Card edges, dividers |
+| `accent` | `#f5a623` | Interactive elements, guitar-related highlights, CTAs |
+| `success` | `#4ade80` | Correct feedback |
+| `warning` | `#f5a623` | Close feedback (same as accent) |
+| `error` | `#ef4444` | Wrong feedback |
+| `textPrimary` | `#e0e0e0` | Body text |
+| `textSecondary` | `#888888` | Labels, secondary info |
+| `textDisabled` | `#555555` | Placeholder, unavailable |
+
+### Typography
+SF Pro (macOS system font). No custom typeface needed — SF Pro is the correct choice for
+a pro tool on macOS.
+
+| Role | Size | Weight |
+|------|------|--------|
+| Screen title | 20px | Bold (700) |
+| Card title label | 11px | Semibold (600), uppercase, +0.08em tracking |
+| Interval display (large) | 42px | ExtraBold (800) |
+| Pitch readout | 36px | Bold (700) |
+| Body | 14px | Regular (400) |
+| Secondary | 12–13px | Regular (400) |
+| Micro label | 11px | Regular or Semibold |
+
+### Spacing (8px grid)
+Use multiples of 8: 4 / 8 / 12 / 16 / 20 / 24 / 32px.
+Padding inside cards: 20px. Gap between cards: 16px. Screen edge padding: 24px.
+
+### Corner Radius
+- 6px: small elements (buttons, chips, badges)
+- 10px: cards
+- 12px: hero/large cards
+- 50%: circular icon buttons (Play button)
+
+### Minimum Window Size
+900 × 640px. Below this, sidebar collapses from 200px to 44px (icons only, no labels).
+Fretboard SVG scales proportionally.
+
+### Keyboard Navigation
+- `Space`: advance to next exercise (primary hands-free control)
+- `Return`: replay current interval
+- `Escape`: pause session
+- `Arrow keys`: navigate sidebar
+- All interactive elements Tab-navigable
+
+### Accessibility
+- Confusion matrix heatmap: dual encoding (color + percentage label in every cell).
+  Each cell gets `accessibilityLabel`: e.g., "Minor third, mid register, 41% accuracy,
+  below 50 percent threshold."
+- Audio cue tones must be perceptually distinct for CI users with compressed frequency
+  discrimination: use large-interval contrasts, not subtle pitch variations.
+- Color is never the sole signal for any information (WCAG 1.4.1 compliance).
+- Minimum touch/click target: 44px (matches iOS HIG; comfortable for mouse users too).
+
+### Interaction States (all screens)
+| State | What user sees |
+|-------|---------------|
+| App startup | "Setting up audio engine..." progress indicator blocking ExerciseView |
+| Mic permission prompt | Sheet: "EarTrain CI needs microphone access to hear your guitar playing." |
+| Mic permission denied | Error panel: "Microphone access denied — open System Settings → Privacy → Microphone" + Open Settings button |
+| Audio engine failure | Error panel: "Couldn't initialize audio. Check your input device in Settings." |
+| HomeView (no sessions) | Empty state: "No sessions yet. Take the calibration assessment or start practicing." + two CTAs |
+| Drill My Misses unavailable | Button greyed out, hover tooltip: "Available after 5 attempts per interval register (currently N/24 buckets ready)" |
+| Low pitch confidence | Inline note under waveform: "Having trouble detecting pitch — try playing louder or check your input device" |
+| Audio interrupted | Banner: "Audio interrupted. Press Return or click to resume." Session paused, state preserved. |
+| Session paused (Escape) | Same banner as interruption. |
+| 12h milestone reached | Banner: "12-hour milestone! Research shows measurable CI improvement at this point. Keep going." |
 
 ## Future Ideas (out of scope for now)
 
