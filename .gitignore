@@ -1,0 +1,25 @@
+# Swift Package Manager build artifacts
+EarTrain/.build/
+
+# SwiftPM Xcode-generated workspace (created when opened in Xcode)
+EarTrain/.swiftpm/xcode/
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+
+# Xcode DerivedData (if user has per-project DerivedData location set)
+DerivedData/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
