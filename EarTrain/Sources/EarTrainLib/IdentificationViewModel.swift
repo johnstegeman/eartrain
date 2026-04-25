@@ -84,7 +84,7 @@ public final class IdentificationViewModel: ObservableObject {
 
         Task {
             try? await Task.sleep(for: .seconds(correct ? 1.5 : 3.0))
-            playTeaching()
+            startNextRound()
         }
     }
 
@@ -101,6 +101,16 @@ public final class IdentificationViewModel: ObservableObject {
     }
 
     // MARK: - Private
+
+    /// Teaching only when starting fresh: new focus interval, or just got one wrong.
+    /// Once the user is on a streak, skip straight to the quiz.
+    private func startNextRound() {
+        if correctStreak == 0 {
+            playTeaching()
+        } else {
+            playQuiz()
+        }
+    }
 
     private func playTeaching() {
         teachRootHz = randomRootHz()
