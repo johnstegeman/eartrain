@@ -21,6 +21,17 @@ public final class AudioEngineManager: ObservableObject {
 
     public let intervalPlayer = IntervalPlayer()
 
+    /// CI Bluetooth keep-alive is active whenever the engine is running.
+    /// AVAudioEngine keeps the macOS audio session alive even when outputting
+    /// silence, which prevents the CI Bluetooth stream from suspending between
+    /// exercises. Toggle lets the user opt out if they don't stream via BT.
+    @Published public var keepAliveEnabled: Bool = true {
+        didSet { applyKeepAlive() }
+    }
+
+    /// True when the engine is running and keepAlive is enabled.
+    public var keepAliveActive: Bool { isRunning && keepAliveEnabled }
+
     // MARK: - Private
 
     private var engine: AVAudioEngine?
@@ -75,6 +86,16 @@ public final class AudioEngineManager: ObservableObject {
             isRunning = true
         } catch {
             engineError = "Couldn't start audio engine: \(error.localizedDescription)"
+        }
+    }
+
+    private func applyKeepAlive() {
+        // Keep-alive is implicit: engine running = audio session alive = CI stream active.
+        // When disabled we stop the engine (halting mic too); re-enable restarts it.
+        if keepAliveEnabled && !isRunning {
+            start()
+        } else if !keepAliveEnabled && isRunning {
+            stop()
         }
     }
 

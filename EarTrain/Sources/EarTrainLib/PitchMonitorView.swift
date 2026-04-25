@@ -13,6 +13,7 @@ public struct PitchMonitorView: View {
             pitchReadout
             amplitudeBar
             playIntervalButton
+            keepAliveBadge
             if let err = audio.engineError {
                 errorBanner(err)
             }
@@ -105,6 +106,26 @@ public struct PitchMonitorView: View {
         }
         .buttonStyle(AccentButtonStyle())
         .disabled(audio.intervalPlayer.isPlaying)
+    }
+
+    // MARK: - CI Keep-alive indicator
+
+    private var keepAliveBadge: some View {
+        Toggle(isOn: $audio.keepAliveEnabled) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(audio.keepAliveActive ? EarTrainColors.success : EarTrainColors.textDisabled)
+                    .frame(width: 7, height: 7)
+                Text(audio.keepAliveActive
+                     ? "CI keep-alive: active"
+                     : "CI keep-alive: off")
+                    .font(.system(size: 12))
+                    .foregroundColor(EarTrainColors.textSecondary)
+            }
+        }
+        .toggleStyle(.switch)
+        .tint(EarTrainColors.success)
+        .frame(maxWidth: 260)
     }
 
     private func errorBanner(_ message: String) -> some View {
