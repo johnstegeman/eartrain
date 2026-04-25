@@ -218,13 +218,15 @@ data to start "Drill My Misses" immediately and avoid starting at the wrong diff
 - App plays two notes (root + interval) using pure sine waves (cleaner for CI perception)
 - User plays the interval back on guitar via mic/audio interface
 - `AmplitudeTracker` (AudioKit) detects note onsets; `PitchTap` detects pitch per onset
-- Pitch grading — four result cases:
-  - `correct` — detected pitch within ±25 cents of target
-  - `octaveDisplaced` — interval class matches mod 12, but off by exactly 12 semitones
-    (e.g., played P5 an octave up; detection rule: `abs(detected - target) % 12 < 1 semitone`)
-  - `close(played: Interval)` — within ±1 semitone but outside ±25 cents (catches m3/M3 confusion)
-  - `wrong(played: Interval)` — more than 1 semitone off; shows what was played
-- All four cases logged in confusion matrix per (interval, register) bucket
+- Pitch grading — four result cases (evaluated in priority order):
+  1. `octaveDisplaced` — interval class matches mod 12, within ±50 cents of octave-shifted target
+     (e.g., played P5 an octave up; detection rule: `abs(detected_semitones - target_semitones) % 12 < 0.5`)
+     (checked first to prevent boundary misclassification)
+  2. `correct` — detected pitch within ±25 cents of target
+  3. `close(played: Interval)` — within ±100 cents (1 semitone) but outside ±25 cents (catches m3/M3 confusion)
+  4. `wrong(played: Interval)` — more than 1 semitone off; shows what was played
+  - If PitchTap confidence < 0.9 for 10+ consecutive frames after onset: no Result logged; user prompted to replay
+- All four cases (and no-read events) logged in confusion matrix per (interval, register) bucket
 - "Root note" in Settings is fixed for the session (user-selected before starting); not randomized
   per exercise. This keeps the exercise context stable and simplifies session setup.
 - Interval set: M2, m3, M3, P4, P5, M6, m7, P8 (all pentatonic scale intervals)
@@ -264,32 +266,52 @@ data to start "Drill My Misses" immediately and avoid starting at the wrong diff
 
 ## Technical Architecture
 
+**Platform targets:** macOS 13 (Ventura) minimum. Swift 5.9+. AudioKit 5.x via Swift Package Manager.
+
 ```
 EarTrain (macOS SwiftUI app)
-├── Audio Engine (AudioKit)
-│   ├── AmplitudeTracker — onset detection (note start events)
-│   ├── PitchTap — pitch detection per onset (fundamental frequency)
+├── Audio Engine (AudioKit — single AVAudioEngine instance)
+│   ├── AmplitudeTracker — RMS amplitude gate for onset detection
+│   ├── PitchTap — continuous pitch polling (fundamental frequency, ~93ms/frame)
 │   ├── SineOscillator — interval/melody playback (pure tones, better for CI)
-│   └── Silence output node — 0-amplitude buffer for CI Bluetooth keep-alive
+│   └── Silence mixer node — 0-amplitude Mixer in AudioKit graph for CI Bluetooth keep-alive
+│       (NOT a separate AVAudioEngine — AudioKit owns the engine; silence node lives in its graph)
+├── Note Detection Pipeline (gate approach)
+│   ├── Onset: AmplitudeTracker crosses threshold (-40dBFS → -20dBFS) → start collecting PitchTap readings
+│   ├── Stability: N=3 consecutive PitchTap readings within 25 cents → lock pitch, grade note
+│   ├── Reset: amplitude drops below onset threshold → reset gate, ready for next note
+│   ├── Confidence: PitchTap confidence < 0.9 → discard frame (don't count toward N=3)
+│   └── No-read: if confidence < 0.9 for 10+ consecutive frames → show "couldn't detect pitch, try again"
 ├── Exercise Engine
 │   ├── IntervalExercise — generates root + target interval, evaluates response
-│   │   └── Result: correct | octaveDisplaced | close(Interval) | wrong(Interval)
+│   │   ├── Result enum (priority order — check in this sequence):
+│   │   │   1. octaveDisplaced — interval class matches mod 12, within ±50 cents of octave-shifted target
+│   │   │   2. correct — within ±25 cents of target
+│   │   │   3. close(played: Interval) — within ±100 cents (1 semitone) of target
+│   │   │   4. wrong(played: Interval) — all other cases
+│   │   └── (octaveDisplaced checked first to prevent misclassification at the ±1 semitone boundary)
 │   └── RegisterBucket — maps Hz to low/mid/high (E2–B3 / C4–B4 / C5+)
 │       (MelodyExercise is Phase 2 — not in Phase 1 codebase)
+├── State Management
+│   ├── AudioKit callbacks arrive on background threads
+│   ├── All UI state updates dispatched to @MainActor via DispatchQueue.main.async or AsyncStream
+│   └── ExerciseViewModel (@MainActor ObservableObject) owns current exercise state, last Result
 ├── Analytics
 │   ├── ConfusionMatrix — [Interval: [Register: [Result]]] per session + cumulative
 │   ├── ProgressStore — session history, accuracy trends over time
 │   └── DrillMisses — ranks buckets by error rate (min 5 trials), generates drill set
 ├── Persistence
 │   └── JSON files in ~/Library/Application Support/EarTrain/
-│       ├── sessions/ — one file per practice session
-│       └── cumulative.json — aggregated confusion matrix + progress
+│       ├── sessions/ — one file per practice session (includes schemaVersion: Int)
+│       └── cumulative.json — aggregated confusion matrix + progress (includes schemaVersion: Int)
+│           (schema versioning added now; migration needed if Result enum gains new cases)
 └── UI (SwiftUI) — 5 screens
     ├── HomeView — start session, quick stats, "Drill My Misses" shortcut
     ├── ExerciseView — active practice: play interval, listen, get feedback
     ├── FeedbackView — per-attempt result (modal/inline after each response)
     ├── ProgressView — confusion matrix heatmap + accuracy trend over time
-    └── SettingsView — input device, interval set, register range, keep-alive toggle
+    └── SettingsView — input device, interval set, register range, keep-alive toggle,
+                       audio buffer size (128/256/512 samples — Advanced section)
 ```
 
 ## Open Questions
