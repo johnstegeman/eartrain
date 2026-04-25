@@ -75,7 +75,20 @@ public final class SamplePlayer {
             else { continue }
 
             try? file.read(into: buffer)
-            loaded[midi] = buffer
+
+            // The engine connection uses stereo format; upmix mono WAVs to stereo.
+            if buffer.format.channelCount == 1,
+               let stereoFmt = AVAudioFormat(standardFormatWithSampleRate: buffer.format.sampleRate, channels: 2),
+               let stereo = AVAudioPCMBuffer(pcmFormat: stereoFmt, frameCapacity: buffer.frameCapacity),
+               let src = buffer.floatChannelData, let dst = stereo.floatChannelData {
+                stereo.frameLength = buffer.frameLength
+                let count = Int(buffer.frameLength)
+                memcpy(dst[0], src[0], count * MemoryLayout<Float>.size)
+                memcpy(dst[1], src[0], count * MemoryLayout<Float>.size)
+                loaded[midi] = stereo
+            } else {
+                loaded[midi] = buffer
+            }
         }
         buffers = loaded
     }
@@ -89,7 +102,11 @@ public final class SamplePlayer {
         guard let node   = playerNode,
               let buffer = buffers[midiNote] else { return }
 
-        await node.scheduleBuffer(buffer, at: nil, options: .interrupts)
+        // Use completionHandler: nil to select the synchronous overload.
+        // The async overload of scheduleBuffer waits for the buffer to *finish*
+        // playing, so calling it before node.play() deadlocks the Task forever
+        // and eventually corrupts Swift Concurrency's executor state.
+        node.scheduleBuffer(buffer, at: nil, options: .interrupts, completionHandler: nil)
         node.play()
         try? await Task.sleep(for: .seconds(duration))
         node.stop()

@@ -43,6 +43,7 @@ public final class ExerciseViewModel: ObservableObject {
     // MARK: - Private
 
     private var listenTask: Task<Void, Never>?
+    private var playTask:   Task<Void, Never>?
     private var logger: SessionLogger?
 
     private let stabilityCount  = 3
@@ -58,6 +59,10 @@ public final class ExerciseViewModel: ObservableObject {
     }
 
     public func stopEngine() {
+        listenTask?.cancel()
+        listenTask = nil
+        playTask?.cancel()
+        playTask = nil
         audio.stop()
         logger?.endSession()
         logger = nil
@@ -67,26 +72,32 @@ public final class ExerciseViewModel: ObservableObject {
 
     public func startExercise() {
         listenTask?.cancel()
+        playTask?.cancel()
         let interval = activeIntervals.randomElement() ?? .m3
         currentInterval = interval
         phase = .playing
 
-        Task {
+        playTask = Task {
             let targetHz = interval.targetHz(rootHz: rootHz)
             await audio.playInterval(rootHz: rootHz, intervalHz: targetHz)
+            guard !Task.isCancelled else { return }
             // 500ms gate prevents sine tone from self-triggering the detector.
             try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
             beginListening(for: interval)
         }
     }
 
     public func replayInterval() {
         listenTask?.cancel()
+        playTask?.cancel()
         phase = .playing
-        Task {
+        playTask = Task {
             let targetHz = currentInterval.targetHz(rootHz: rootHz)
             await audio.playInterval(rootHz: rootHz, intervalHz: targetHz)
+            guard !Task.isCancelled else { return }
             try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
             beginListening(for: currentInterval)
         }
     }

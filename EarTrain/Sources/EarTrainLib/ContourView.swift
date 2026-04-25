@@ -66,8 +66,15 @@ public struct ContourView: View {
                     Text("Was the second note…")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(EarTrainColors.textPrimary)
-                    Button("Replay") { vm.replayPair() }
-                        .buttonStyle(AccentButtonStyle())
+                    Text("Replay")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(EarTrainColors.accent)
+                        .cornerRadius(6)
+                        .contentShape(Rectangle())
+                        .onTapGesture { vm.replayPair() }
                 }
 
             case .result(let correct, let answer):
@@ -114,20 +121,25 @@ public struct ContourView: View {
     }
 
     private func contourButton(_ contour: ContourViewModel.Contour, disabled: Bool) -> some View {
-        Button {
-            vm.answer(contour)
-        } label: {
-            VStack(spacing: 6) {
-                Image(systemName: contour.icon)
-                    .font(.system(size: 22))
-                Text(contour.label)
-                    .font(.system(size: 14, weight: .semibold))
-            }
-            .frame(width: 90, height: 72)
+        VStack(spacing: 6) {
+            Image(systemName: contour.icon)
+                .font(.system(size: 22))
+            Text(contour.label)
+                .font(.system(size: 14, weight: .semibold))
         }
-        .buttonStyle(ContourButtonStyle())
-        .disabled(disabled)
+        .frame(width: 90, height: 72)
+        .foregroundColor(EarTrainColors.textPrimary)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(EarTrainColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(EarTrainColors.accent.opacity(0.3), lineWidth: 1.5)
+                )
+        )
         .opacity(disabled ? 0.4 : 1)
+        .contentShape(Rectangle())
+        .onTapGesture { if !disabled { vm.answer(contour) } }
     }
 }
 

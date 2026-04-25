@@ -107,8 +107,15 @@ public struct IdentificationView: View {
                     Text("Is this a \(vm.focusInterval.displayName)?")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(EarTrainColors.textPrimary)
-                    Button("Replay") { vm.replayQuiz() }
-                        .buttonStyle(AccentButtonStyle())
+                    Text("Replay")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(EarTrainColors.accent)
+                        .cornerRadius(6)
+                        .contentShape(Rectangle())
+                        .onTapGesture { vm.replayQuiz() }
                 }
 
             case .result(let correct, let wasTarget, let actual):
@@ -158,18 +165,25 @@ public struct IdentificationView: View {
 
     private func answerButton(label: String, icon: String, enabled: Bool,
                                action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 22, weight: .semibold))
-                Text(label)
-                    .font(.system(size: 15, weight: .semibold))
-            }
-            .frame(width: 90, height: 72)
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 22, weight: .semibold))
+            Text(label)
+                .font(.system(size: 15, weight: .semibold))
         }
-        .buttonStyle(ContourButtonStyle())
-        .disabled(!enabled)
+        .frame(width: 90, height: 72)
+        .foregroundColor(EarTrainColors.textPrimary)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(EarTrainColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(EarTrainColors.accent.opacity(0.3), lineWidth: 1.5)
+                )
+        )
         .opacity(enabled ? 1 : 0.4)
+        .contentShape(Rectangle())
+        .onTapGesture { if enabled { action() } }
     }
 }
 

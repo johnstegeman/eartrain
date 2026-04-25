@@ -32,13 +32,15 @@ public struct ContentView: View {
         HStack(spacing: 0) {
             ForEach(AppMode.allCases, id: \.self) { m in
                 let selected = mode == m
-                Button(m.label) { mode = m }
+                Text(m.label)
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundColor(selected ? .black : EarTrainColors.textSecondary)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
                     .background(selected ? EarTrainColors.accent : Color.clear)
                     .cornerRadius(6)
+                    .contentShape(Rectangle())
+                    .onTapGesture { mode = m }
             }
         }
         .padding(4)
@@ -115,10 +117,15 @@ private struct MicBlockedView: View {
                 .foregroundColor(EarTrainColors.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 320)
-            Button("Open System Settings") {
-                openSettings()
-            }
-            .buttonStyle(AccentButtonStyle())
+            Text("Open System Settings")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.black)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(EarTrainColors.accent)
+                .cornerRadius(6)
+                .contentShape(Rectangle())
+                .onTapGesture { openSettings() }
         }
     }
 }
