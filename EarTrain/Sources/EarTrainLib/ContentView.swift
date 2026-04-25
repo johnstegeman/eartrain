@@ -29,12 +29,21 @@ public struct ContentView: View {
     }
 
     private var modePicker: some View {
-        Picker("Mode", selection: $mode) {
+        HStack(spacing: 0) {
             ForEach(AppMode.allCases, id: \.self) { m in
-                Text(m.label).tag(m)
+                let selected = mode == m
+                Button(m.label) { mode = m }
+                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .foregroundColor(selected ? .black : EarTrainColors.textSecondary)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+                    .background(selected ? EarTrainColors.accent : Color.clear)
+                    .cornerRadius(6)
             }
         }
-        .pickerStyle(.segmented)
+        .padding(4)
+        .background(EarTrainColors.surface)
+        .cornerRadius(8)
         .padding(.horizontal, 24)
         .padding(.vertical, 10)
     }
