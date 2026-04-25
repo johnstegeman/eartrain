@@ -4,8 +4,13 @@ import SwiftUI
 /// Drives a single interval-training session.
 ///
 /// State machine:
-///   idle → playing → listening → result → (next) playing …
-///   Any state → noRead (8 s timeout) → listening (user can replay)
+///   idle → playing → awaitingRoot → awaitingInterval → result → (next) playing …
+///   Any state → noRead (8 s timeout) → user can replay
+///
+/// Two-note detection: the app listens for the root note first, then the
+/// interval note. The interval is graded from the relationship between the
+/// two detected pitches — not from the Settings root — so the exercise works
+/// from any starting note the user chooses.
 @MainActor
 public final class ExerciseViewModel: ObservableObject {
 
@@ -14,16 +19,17 @@ public final class ExerciseViewModel: ObservableObject {
     public enum Phase: Equatable {
         case idle
         case playing
-        case listening
+        case awaitingRoot       // waiting for user to play first note
+        case awaitingInterval   // root detected, waiting for interval note
         case result(ExerciseResult)
-        case noRead          // pitch couldn't be detected — prompt user to replay
+        case noRead             // couldn't detect pitch — prompt to replay
     }
 
     // MARK: - Published
 
     @Published public var phase: Phase = .idle
     @Published public var currentInterval: Interval = .m3
-    @Published public var rootHz: Float = 440.0   // A4 default; user-settable per session
+    @Published public var rootHz: Float = 440.0   // A4 default; used for playback only
 
     // MARK: - Settings
 
@@ -38,13 +44,10 @@ public final class ExerciseViewModel: ObservableObject {
 
     private var listenTask: Task<Void, Never>?
 
-    // Stability tracking: collect consecutive pitch readings and check spread
     private let stabilityCount  = 3
     private let stabilityCents: Float = 25
-
-    // Noise floor and timeout
     private let amplitudeThreshold: Float = 0.02
-    private let listenTimeoutSeconds: TimeInterval = 8
+    private let listenTimeoutSeconds: TimeInterval = 10  // per note, not total
 
     public init() {}
 
@@ -53,7 +56,6 @@ public final class ExerciseViewModel: ObservableObject {
 
     // MARK: - Control
 
-    /// Start (or restart) an exercise with a random interval from `activeIntervals`.
     public func startExercise() {
         listenTask?.cancel()
         let interval = activeIntervals.randomElement() ?? .m3
@@ -63,13 +65,12 @@ public final class ExerciseViewModel: ObservableObject {
         Task {
             let targetHz = interval.targetHz(rootHz: rootHz)
             await audio.intervalPlayer.playInterval(rootHz: rootHz, intervalHz: targetHz)
-            // 500 ms gate: prevent the sine tone from self-triggering the detector.
+            // 500ms gate prevents sine tone from self-triggering the detector.
             try? await Task.sleep(for: .milliseconds(500))
             beginListening(for: interval)
         }
     }
 
-    /// Replay the current interval without picking a new one.
     public func replayInterval() {
         listenTask?.cancel()
         phase = .playing
@@ -84,33 +85,54 @@ public final class ExerciseViewModel: ObservableObject {
     // MARK: - Private
 
     private func beginListening(for interval: Interval) {
-        phase = .listening
+        phase = .awaitingRoot
         listenTask = Task { [weak self] in
             guard let self else { return }
-            let result = await self.waitForStablePitch(interval: interval)
-            guard !Task.isCancelled else { return }
-            if let result {
-                self.phase = .result(result)
-                // Auto-advance after feedback delay: 2s correct/close, 4s wrong/displaced
-                let delay: TimeInterval
-                switch result {
-                case .correct, .close:    delay = 2.0
-                case .wrong, .octaveDisplaced: delay = 4.0
-                }
-                try? await Task.sleep(for: .seconds(delay))
+
+            // Step 1: detect root note
+            guard let detectedRoot = await self.waitForStableNote() else {
                 guard !Task.isCancelled else { return }
-                self.startExercise()
-            } else {
-                self.phase = .noRead
+                self.phase = .noRead; return
             }
+            guard !Task.isCancelled else { return }
+
+            // Step 2: wait for silence between notes
+            self.phase = .awaitingInterval
+            await self.waitForSilence()
+            guard !Task.isCancelled else { return }
+
+            // Step 3: detect interval note
+            guard let detectedInterval = await self.waitForStableNote() else {
+                guard !Task.isCancelled else { return }
+                self.phase = .noRead; return
+            }
+            guard !Task.isCancelled else { return }
+
+            // Grade using the interval between the two played notes
+            let result = ExerciseResult.grade(
+                rootHz: detectedRoot,
+                interval: interval,
+                detectedHz: detectedInterval
+            )
+            self.phase = .result(result)
+
+            let delay: TimeInterval
+            switch result {
+            case .correct, .close:         delay = 2.0
+            case .wrong, .octaveDisplaced: delay = 4.0
+            }
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            self.startExercise()
         }
     }
 
-    /// Poll for a stable pitch reading. Returns nil on timeout or cancellation.
-    private func waitForStablePitch(interval: Interval) async -> ExerciseResult? {
+    // MARK: - Note detection helpers
+
+    /// Wait for a stable pitch reading. Returns the average Hz of the stable window, or nil on timeout.
+    private func waitForStableNote() async -> Float? {
         let deadline = Date().addingTimeInterval(listenTimeoutSeconds)
         var readings: [Float] = []
-        var wasQuiet = true
 
         while Date() < deadline {
             guard !Task.isCancelled else { return nil }
@@ -119,34 +141,33 @@ public final class ExerciseViewModel: ObservableObject {
             let amp = audio.amplitude
             let hz  = audio.detectedHz
 
-            // Reset accumulator on silence
-            if amp < amplitudeThreshold {
-                wasQuiet = true
-                readings = []
-                continue
-            }
-
-            // Onset
-            if wasQuiet { wasQuiet = false; readings = [] }
-
-            // Accumulate readings while signal is present
+            if amp < amplitudeThreshold { readings = []; continue }
             if hz > 20 { readings.append(hz) }
-
-            // Need at least stabilityCount readings
             guard readings.count >= stabilityCount else { continue }
 
-            // Check that the last N readings are within stabilityCents of each other
             let window = readings.suffix(stabilityCount).map { Double($0) }
-            let minHz = window.min()!
-            let maxHz = window.max()!
-            let spread = Float(abs(1200 * log2(maxHz / minHz)))
+            let spread = Float(abs(1200 * log2(window.max()! / window.min()!)))
             guard spread < stabilityCents else { continue }
 
-            // Stable — grade the average
-            let avgHz = Float(window.reduce(0, +) / Double(window.count))
-            return ExerciseResult.grade(rootHz: rootHz, interval: interval, detectedHz: avgHz)
+            return Float(window.reduce(0, +) / Double(window.count))
         }
+        return nil
+    }
 
-        return nil   // timeout
+    /// Wait until amplitude drops below threshold for at least 150ms.
+    private func waitForSilence() async {
+        let deadline = Date().addingTimeInterval(listenTimeoutSeconds)
+        var quietFrames = 0
+        let requiredFrames = 3  // 3 × 50ms = 150ms of silence
+
+        while Date() < deadline, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(50))
+            if audio.amplitude < amplitudeThreshold {
+                quietFrames += 1
+                if quietFrames >= requiredFrames { return }
+            } else {
+                quietFrames = 0
+            }
+        }
     }
 }

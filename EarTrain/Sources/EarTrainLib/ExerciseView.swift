@@ -63,12 +63,20 @@ public struct ExerciseView: View {
                 .foregroundColor(EarTrainColors.accent)
                 .font(.system(size: 16, weight: .semibold))
 
-            case .listening:
+            case .awaitingRoot:
                 HStack(spacing: 8) {
                     Image(systemName: "mic.fill")
-                    Text("Play it on your guitar")
+                    Text("Play the root note")
                 }
                 .foregroundColor(EarTrainColors.textPrimary)
+                .font(.system(size: 16, weight: .semibold))
+
+            case .awaitingInterval:
+                HStack(spacing: 8) {
+                    Image(systemName: "mic.fill")
+                    Text("Now play the interval")
+                }
+                .foregroundColor(EarTrainColors.accent)
                 .font(.system(size: 16, weight: .semibold))
 
             case .result(let result):
@@ -119,7 +127,9 @@ public struct ExerciseView: View {
         HStack(spacing: 16) {
             Button("Replay") { vm.replayInterval() }
                 .buttonStyle(AccentButtonStyle())
-                .disabled(vm.phase == .playing || vm.phase == .listening)
+                .disabled(vm.phase == .playing
+                       || vm.phase == .awaitingRoot
+                       || vm.phase == .awaitingInterval)
 
             if vm.phase == .noRead {
                 Button("Try Again") { vm.replayInterval() }
