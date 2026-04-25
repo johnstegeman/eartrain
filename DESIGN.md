@@ -211,6 +211,25 @@ when the user plays the correct interval.
 - Lives in the sidebar nav as its own view (not a mode of ExerciseView)
 - Nav order: **Tune → Practice → Progress → Settings**
 
+### Phase 0 — Contour Mode ("Higher, Lower, or Same?")
+
+The most basic possible ear training — melodic contour discrimination. For users who are
+just getting started and don't yet have reliable interval perception.
+
+**Exercise loop:**
+1. App plays two notes sequentially
+2. User taps: **Higher / Lower / Same**
+3. Immediate feedback; next pair
+
+**Why this matters for CI users:** Melodic contour (up/down) is consistently the easiest
+pitch-discrimination task for CI users — it's the baseline used in published CI training
+research before introducing interval size. Some users may find even this challenging in
+certain registers. Starting here meets every user where they actually are.
+
+**Progression:** Once accuracy exceeds a threshold (e.g. 80% over 20 trials), the app
+suggests moving to Identification Mode. The contour response also gives an early signal
+about which registers are most reliable for a given user.
+
 ### Phase 0 — Identification Mode ("Is this a m3?")
 
 Some users — particularly CI users new to interval training — need to learn what intervals
