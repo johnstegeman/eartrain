@@ -66,38 +66,47 @@ public final class ContourViewModel: ObservableObject {
     private var correctContour: Contour = .higher
     private var rootHz: Float = 440
     private var secondHz: Float = 660
+    private var currentTask: Task<Void, Never>?
 
     public init() {}
 
     public func startEngine() { audio.start() }
-    public func stopEngine()  { audio.stop() }
+    public func stopEngine()  {
+        currentTask?.cancel()
+        currentTask = nil
+        audio.stop()
+    }
 
     // MARK: - Control
 
     public func startExercise() {
+        currentTask?.cancel()
         phase = .playing
         let (root, second, contour) = generatePair()
         rootHz = root
         secondHz = second
         correctContour = contour
 
-        Task {
+        currentTask = Task {
             await audio.playInterval(
                 rootHz: rootHz, intervalHz: secondHz,
                 noteDuration: 1.2, gap: 0.35
             )
+            guard !Task.isCancelled else { return }
             phase = .awaitingAnswer
         }
     }
 
     public func replayPair() {
         guard case .awaitingAnswer = phase else { return }
+        currentTask?.cancel()
         phase = .playing
-        Task {
+        currentTask = Task {
             await audio.playInterval(
                 rootHz: rootHz, intervalHz: secondHz,
                 noteDuration: 1.2, gap: 0.35
             )
+            guard !Task.isCancelled else { return }
             phase = .awaitingAnswer
         }
     }
@@ -109,9 +118,10 @@ public final class ContourViewModel: ObservableObject {
         if correct { correctTrials += 1 }
         phase = .result(correct: correct, correctAnswer: correctContour)
 
-        Task {
+        currentTask = Task {
             let delay: TimeInterval = correct ? 1.5 : 3.0
             try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
             startExercise()
         }
     }

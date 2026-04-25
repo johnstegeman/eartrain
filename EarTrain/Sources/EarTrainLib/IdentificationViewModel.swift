@@ -51,11 +51,16 @@ public final class IdentificationViewModel: ObservableObject {
     private var teachRootHz: Float = 440
     private var quizRootHz:  Float = 440
     private var correctStreak = 0
+    private var currentTask: Task<Void, Never>?
 
     public init() {}
 
     public func startEngine() { audio.start() }
-    public func stopEngine()  { audio.stop() }
+    public func stopEngine()  {
+        currentTask?.cancel()
+        currentTask = nil
+        audio.stop()
+    }
 
     // MARK: - Control
 
@@ -82,20 +87,24 @@ public final class IdentificationViewModel: ObservableObject {
             focusInterval = others.randomElement() ?? focusInterval
         }
 
-        Task {
+        currentTask?.cancel()
+        currentTask = Task {
             try? await Task.sleep(for: .seconds(correct ? 1.5 : 3.0))
+            guard !Task.isCancelled else { return }
             startNextRound()
         }
     }
 
     public func replayQuiz() {
         guard case .awaitingAnswer = phase else { return }
+        currentTask?.cancel()
         phase = .playingQuiz
-        Task {
+        currentTask = Task {
             await audio.playInterval(
                 rootHz: quizRootHz,
                 intervalHz: quizInterval.targetHz(rootHz: quizRootHz)
             )
+            guard !Task.isCancelled else { return }
             phase = .awaitingAnswer
         }
     }
@@ -117,12 +126,15 @@ public final class IdentificationViewModel: ObservableObject {
         phase = .teaching
         let root = teachRootHz
         let interval = focusInterval
-        Task {
+        currentTask?.cancel()
+        currentTask = Task {
             await audio.playInterval(
                 rootHz: root,
                 intervalHz: interval.targetHz(rootHz: root)
             )
+            guard !Task.isCancelled else { return }
             try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
             playQuiz()
         }
     }
@@ -138,11 +150,13 @@ public final class IdentificationViewModel: ObservableObject {
 
         let root = quizRootHz
         let quiz = quizInterval
-        Task {
+        currentTask?.cancel()
+        currentTask = Task {
             await audio.playInterval(
                 rootHz: root,
                 intervalHz: quiz.targetHz(rootHz: root)
             )
+            guard !Task.isCancelled else { return }
             phase = .awaitingAnswer
         }
     }
