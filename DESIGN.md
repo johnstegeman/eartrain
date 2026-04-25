@@ -540,6 +540,18 @@ EarTrain (macOS SwiftUI app)
 3. **CI processor variants**: Won't do in MVP. The confusion matrix and drill logic work for any
    CI user. Processor-specific customization (Cochlear vs. MED-EL vs. Advanced Bionics channel
    mapping) is a potential future enhancement but not required for usefulness.
+4. **Timbre selection** (sine → acoustic guitar → clean electric → overdriven electric): Users
+   should be able to progress from the research-ideal pure sine tone toward real-world guitar
+   timbres as their training advances. Two implementation paths under consideration:
+   - **Karplus-Strong synthesis**: physically-modelled plucked string, no asset files, clean
+     electric comes naturally, distortion via soft-clip waveshaper. Prototype needed to evaluate
+     sound quality before committing.
+   - **Bundled samples**: FluidR3_GM soundfont (CC-BY 3.0) has acoustic steel, clean electric,
+     overdriven, and distortion guitar. Requires extracting per-note WAV files from the SF2 and
+     bundling ~20–40 samples per timbre; pitch-shifting fills the gaps. More realistic sound,
+     more asset management work.
+   Decision pending: build Karplus-Strong prototype first, compare against FluidR3_GM samples,
+   then choose.
 
 ## Success Criteria
 
