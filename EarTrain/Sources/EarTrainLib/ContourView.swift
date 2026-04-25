@@ -131,9 +131,9 @@ public struct ContourView: View {
     }
 }
 
-// MARK: - Button style
+// MARK: - Button style (internal — shared with IdentificationView)
 
-private struct ContourButtonStyle: ButtonStyle {
+struct ContourButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundColor(EarTrainColors.textPrimary)
