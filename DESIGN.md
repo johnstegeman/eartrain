@@ -479,18 +479,62 @@ Fretboard SVG scales proportionally.
 
 Rather than hardcoding exercise sequences, the app reads lesson plans from `.etplan` files — JSON documents that specify which exercises to run, in what order, with what parameters, and what "pass" means for each step. Audiologists, researchers, and guitar teachers can author plans in a text editor and distribute them by email. Patients double-click the file; the app loads it and starts.
 
-### ExercisePrimitive Protocol
+### Audio Protocol Split
 
-All exercise types (`ContourViewModel`, `IdentificationViewModel`, `ExerciseViewModel`) conform to a shared Swift protocol. This lets `LessonRunner` drive any exercise type without knowing which one it is.
+Two protocols extracted from `AudioEngineManager` for testability and clean dependency injection:
+
+```swift
+/// Output only — covers all primitives.
+protocol AudioPlaying {
+    func playInterval(rootHz: Float, intervalHz: Float,
+                      noteDuration: TimeInterval, gap: TimeInterval) async
+    func stop()
+}
+
+/// Input only — covers ExerciseViewModel (guitar pitch detection).
+protocol MicListening {
+    var amplitude: Float { get }
+    var detectedHz: Float { get }
+}
+
+// AudioEngineManager conforms to both.
+extension AudioEngineManager: AudioPlaying, MicListening {}
+
+// ContourViewModel + IdentificationViewModel: take AudioPlaying only (no mic needed).
+// ExerciseViewModel: takes (any AudioPlaying & MicListening) — needs both.
+```
+
+Tests inject `MockAudioPlayer: AudioPlaying` and `MockMicInput: MicListening` without touching real hardware.
+
+### ViewModel Ownership
+
+**Freeplay tab mode** (current): `ContentView` holds all three ViewModels as `@StateObject`. Each View accepts an injected VM via `@ObservedObject` — no `@StateObject` inside individual Views. This avoids dual-ownership lifecycle bugs from SwiftUI recreating views.
+
+```
+ContentView (@StateObject contourVM, identVM, intervalVM)
+  ├── ContourView(@ObservedObject vm: contourVM)
+  ├── IdentificationView(@ObservedObject vm: identVM)
+  └── ExerciseView(@ObservedObject vm: intervalVM)
+```
+
+**Lesson mode** (`LessonRunner`): `LessonRunner` creates and holds all ViewModels, injecting the shared `AudioEngineManager`. `LessonView` switches which view is shown based on `runner.currentPrimitive`.
+
+```
+LessonRunner (@StateObject in LessonView)
+  ├── contourVM, identVM, intervalVM (held by LessonRunner)
+  ├── shared AudioEngineManager (one instance)
+  └── LessonView switches: ContourView(vm: runner.contourVM) etc.
+```
+
+### ExercisePrimitive Protocol
 
 ```swift
 public protocol ExercisePrimitive: AnyObject {
-    /// Configure the primitive from a plan step's parameters.
+    /// Configure from plan step parameters. Injects shared audio.
     func configure(step: LessonStep, audio: AudioEngineManager)
-    /// Run the primitive until the step's completion criterion is met.
-    /// Returns .passed or .failed.
+    /// Run until step's completion criterion is met. Returns outcome.
     func run() async -> StepOutcome
-    /// Clean up (cancel tasks, reset state). Called between steps.
+    /// Cancel in-flight tasks and reset state.
     func reset()
 }
 
@@ -499,16 +543,34 @@ public enum StepOutcome { case passed, failed }
 
 ### LessonRunner
 
-`LessonRunner` owns the `AudioEngineManager` and drives steps sequentially:
+`LessonRunner` is an `@MainActor ObservableObject`. It:
 
-1. Load `LessonPlan` from `.etplan` file
-2. For each step in order:
-   a. Instantiate the correct primitive for `step.type`
-   b. Call `primitive.configure(step:audio:)` — injects the shared audio engine
-   c. Call `await primitive.run()` — blocks until the step's completion criterion is met
-   d. On `.passed`: advance to next step (or `onPass` target if specified)
-   e. On `.failed`: go to `onFail` target (default: repeat current step)
-3. On final step completion: mark plan done, show end screen
+1. Validates the `LessonPlan` on load (via `LessonPlanValidator`) — surfaces errors before the preview modal
+2. For each step:
+   a. Creates/configures the correct ViewModel for `step.type`
+   b. Sets `@Published var currentPrimitive` — `LessonView` reacts
+   c. `await primitive.run()` — blocks until criterion met
+   d. On `.passed`: advance. On `.failed`: repeat.
+3. On final step: transitions to `.finished`, shows end screen.
+
+**Cancellation**: holds `private var runTask: Task<Void, Never>?`. `stop()` calls `runTask?.cancel()` then `audio.stop()` — audio cleanup before task teardown.
+
+```
+LessonRunner state machine:
+  idle → validating → previewing → running(step N) → running(step N+1) → ... → finished
+                                        ↑                  |
+                                        └── failed → repeat┘
+```
+
+### LessonPlan Validation
+
+`LessonPlanValidator` runs at file-open time, before the plan preview modal. It checks:
+- `version` ≤ `maxSupportedVersion` (currently 1)
+- Each step's `type` is a known value
+- Required fields present for each step type (e.g., `semitoneRange` for contour)
+- `foilStrategy`, if present, is a known value (`"distant"`, `"adjacent"`, `"random"`)
+
+On validation failure: show an alert with a specific error message. Stay on the currently-active plan. Never let a malformed plan silently load and crash mid-session.
 
 ### .etplan File Type
 
@@ -531,7 +593,7 @@ WindowGroup {
 
 **Plan preview modal**: when a `.etplan` file is opened, show a modal before starting:
 - Plan name, author, description
-- Step count and type summary ("3 steps: Contour → Identification → Playback")
+- Step count and type summary ("3 steps: Contour → Identification → Intervals")
 - Start / Cancel buttons
 
 **Error handling**: if the file fails to parse (bad JSON, unknown version), show an alert with the filename. Stay on the currently-active plan. Never silently ignore failures.
@@ -544,7 +606,7 @@ See `.etplan` JSON schema in the CEO plan. Key fields:
 
 | Field | Type | Applies to | Meaning |
 |-------|------|-----------|---------|
-| `type` | String | all | `"contour"`, `"identification"`, `"playback"` |
+| `type` | String | all | `"contour"`, `"identification"`, `"intervals"` |
 | `trials` | Int | all | Number of attempts (fixed) or window size for passRate |
 | `passRate` | Float | all | Advance when correct/total ≥ value over last `trials` |
 | `streakToAdvance` | Int | all | Advance after N consecutive correct (alternative to passRate) |
@@ -552,9 +614,9 @@ See `.etplan` JSON schema in the CEO plan. Key fields:
 | `onFail` | String | all | `"repeat"` (default) |
 | `semitoneRange` | [Int, Int] | contour | Min/max semitone gap for two-note contour pairs |
 | `focusIntervals` | [String] | identification | Intervals to teach/quiz, e.g. `["P5", "P8"]` |
-| `foilStrategy` | String | identification | `"distant"` / `"adjacent"` / `"random"` |
-| `intervals` | [String] | playback | Interval set for playback mode |
-| `registers` | [String] | playback | `"low"`, `"mid"`, `"high"` — restrict root range |
+| `foilStrategy` | String | identification | `"distant"` (far interval), `"adjacent"` (next semitone), `"random"`. Default: `"random"` on unknown value. |
+| `intervals` | [String] | intervals | Interval set for guitar-response mode |
+| `registers` | [String] | intervals | `"low"`, `"mid"`, `"high"` — restrict root range |
 
 Advancement: use exactly one of `passRate` or `streakToAdvance`. Omit both for fixed trial count.
 
