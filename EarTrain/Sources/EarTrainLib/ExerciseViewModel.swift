@@ -43,6 +43,7 @@ public final class ExerciseViewModel: ObservableObject {
     // MARK: - Private
 
     private var listenTask: Task<Void, Never>?
+    private var logger: SessionLogger?
 
     private let stabilityCount  = 3
     private let stabilityCents: Float = 25
@@ -51,8 +52,16 @@ public final class ExerciseViewModel: ObservableObject {
 
     public init() {}
 
-    public func startEngine() { audio.start() }
-    public func stopEngine()  { audio.stop() }
+    public func startEngine() {
+        audio.start()
+        logger = SessionLogger(mode: "intervals")
+    }
+
+    public func stopEngine() {
+        audio.stop()
+        logger?.endSession()
+        logger = nil
+    }
 
     // MARK: - Control
 
@@ -64,7 +73,7 @@ public final class ExerciseViewModel: ObservableObject {
 
         Task {
             let targetHz = interval.targetHz(rootHz: rootHz)
-            await audio.intervalPlayer.playInterval(rootHz: rootHz, intervalHz: targetHz)
+            await audio.playInterval(rootHz: rootHz, intervalHz: targetHz)
             // 500ms gate prevents sine tone from self-triggering the detector.
             try? await Task.sleep(for: .milliseconds(500))
             beginListening(for: interval)
@@ -76,7 +85,7 @@ public final class ExerciseViewModel: ObservableObject {
         phase = .playing
         Task {
             let targetHz = currentInterval.targetHz(rootHz: rootHz)
-            await audio.intervalPlayer.playInterval(rootHz: rootHz, intervalHz: targetHz)
+            await audio.playInterval(rootHz: rootHz, intervalHz: targetHz)
             try? await Task.sleep(for: .milliseconds(500))
             beginListening(for: currentInterval)
         }
@@ -92,6 +101,7 @@ public final class ExerciseViewModel: ObservableObject {
             // Step 1: detect root note
             guard let detectedRoot = await self.waitForStableNote() else {
                 guard !Task.isCancelled else { return }
+                self.logger?.logNoRead(interval: interval, rootHz: self.rootHz)
                 self.phase = .noRead; return
             }
             guard !Task.isCancelled else { return }
@@ -104,6 +114,7 @@ public final class ExerciseViewModel: ObservableObject {
             // Step 3: detect interval note
             guard let detectedInterval = await self.waitForStableNote() else {
                 guard !Task.isCancelled else { return }
+                self.logger?.logNoRead(interval: interval, rootHz: detectedRoot)
                 self.phase = .noRead; return
             }
             guard !Task.isCancelled else { return }
@@ -114,6 +125,10 @@ public final class ExerciseViewModel: ObservableObject {
                 interval: interval,
                 detectedHz: detectedInterval
             )
+            self.logger?.logTrial(interval: interval,
+                                   rootHz: detectedRoot,
+                                   detectedHz: detectedInterval,
+                                   result: result)
             self.phase = .result(result)
 
             let delay: TimeInterval

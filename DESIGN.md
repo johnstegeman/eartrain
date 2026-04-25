@@ -287,10 +287,15 @@ register"). Then: "Start your first session" CTA. Makes the calibration feel mea
 - "Root note" in Settings is fixed for the session (user-selected before starting); not randomized
   per exercise. This keeps the exercise context stable and simplifies session setup.
 - Interval set: M2, m3, M3, P4, P5, M6, m7, P8 (all pentatonic scale intervals)
-- Register buckets (by guitar fretboard range):
-  - Low: E2–B3 (open strings to 4th string 9th fret)
-  - Mid: C4–B4 (roughly 5th position area)
-  - High: C5 and above
+- Register buckets: configurable via `RegisterBuckets` struct; thresholds stored in
+  user settings. Default (`RegisterBuckets.guitarDefault`):
+  - Low:  E2–E3  (82–175 Hz)  — bass strings (6th/5th string area)
+  - Mid:  F3–A4  (175–440 Hz) — main playing range; A4 (5th fret high E) is
+                                 the practical root ceiling: P5 → E5 (12th fret) ✓
+  - High: A#4+   (466+ Hz)    — upper register; m3/M3/P4 practical only
+  Rationale: A4 root keeps the full interval set reachable — P8 lands at A5
+  (17th fret, accessible on most electrics). The original spec's C5+ high bucket
+  was too narrow; too few intervals are practical above that root.
 - Confusion matrix: logs `(interval, register) → [Result]` for every attempt
 - Progress tracking: session-by-session accuracy per interval and register; trend line
   visible in Progress view so improvement over time is clearly visible
@@ -468,6 +473,195 @@ Fretboard SVG scales proportionally.
 - "Honest" mode: which notes were in vs. out, highlights patterns
 - "Brutally honest" toggle: no softening, just truth
 
+## Config-Driven Lesson Plan Architecture
+
+### Overview
+
+Rather than hardcoding exercise sequences, the app reads lesson plans from `.etplan` files — JSON documents that specify which exercises to run, in what order, with what parameters, and what "pass" means for each step. Audiologists, researchers, and guitar teachers can author plans in a text editor and distribute them by email. Patients double-click the file; the app loads it and starts.
+
+### Audio Protocol Split
+
+Two protocols extracted from `AudioEngineManager` for testability and clean dependency injection:
+
+```swift
+/// Output only — covers all primitives.
+protocol AudioPlaying {
+    func playInterval(rootHz: Float, intervalHz: Float,
+                      noteDuration: TimeInterval, gap: TimeInterval) async
+    func stop()
+}
+
+/// Input only — covers ExerciseViewModel (guitar pitch detection).
+protocol MicListening {
+    var amplitude: Float { get }
+    var detectedHz: Float { get }
+}
+
+// AudioEngineManager conforms to both.
+extension AudioEngineManager: AudioPlaying, MicListening {}
+
+// ContourViewModel + IdentificationViewModel: take AudioPlaying only (no mic needed).
+// ExerciseViewModel: takes (any AudioPlaying & MicListening) — needs both.
+```
+
+Tests inject `MockAudioPlayer: AudioPlaying` and `MockMicInput: MicListening` without touching real hardware.
+
+### ViewModel Ownership
+
+**Freeplay tab mode** (current): `ContentView` holds all three ViewModels as `@StateObject`. Each View accepts an injected VM via `@ObservedObject` — no `@StateObject` inside individual Views. This avoids dual-ownership lifecycle bugs from SwiftUI recreating views.
+
+```
+ContentView (@StateObject contourVM, identVM, intervalVM)
+  ├── ContourView(@ObservedObject vm: contourVM)
+  ├── IdentificationView(@ObservedObject vm: identVM)
+  └── ExerciseView(@ObservedObject vm: intervalVM)
+```
+
+**Lesson mode** (`LessonRunner`): `LessonRunner` creates and holds all ViewModels, injecting the shared `AudioEngineManager`. `LessonView` switches which view is shown based on `runner.currentPrimitive`.
+
+```
+LessonRunner (@StateObject in LessonView)
+  ├── contourVM, identVM, intervalVM (held by LessonRunner)
+  ├── shared AudioEngineManager (one instance)
+  └── LessonView switches: ContourView(vm: runner.contourVM) etc.
+```
+
+### ExercisePrimitive Protocol
+
+```swift
+public protocol ExercisePrimitive: AnyObject {
+    /// Configure from plan step parameters. Injects shared audio.
+    func configure(step: LessonStep, audio: AudioEngineManager)
+    /// Run until step's completion criterion is met. Returns outcome.
+    func run() async -> StepOutcome
+    /// Cancel in-flight tasks and reset state.
+    func reset()
+}
+
+public enum StepOutcome { case passed, failed }
+```
+
+### LessonRunner
+
+`LessonRunner` is an `@MainActor ObservableObject`. It:
+
+1. Validates the `LessonPlan` on load (via `LessonPlanValidator`) — surfaces errors before the preview modal
+2. For each step:
+   a. Creates/configures the correct ViewModel for `step.type`
+   b. Sets `@Published var currentPrimitive` — `LessonView` reacts
+   c. `await primitive.run()` — blocks until criterion met
+   d. On `.passed`: advance. On `.failed`: repeat.
+3. On final step: transitions to `.finished`, shows end screen.
+
+**Cancellation**: holds `private var runTask: Task<Void, Never>?`. `stop()` calls `runTask?.cancel()` then `audio.stop()` — audio cleanup before task teardown.
+
+```
+LessonRunner state machine:
+  idle → validating → previewing → running(step N) → running(step N+1) → ... → finished
+                                        ↑                  |
+                                        └── failed → repeat┘
+```
+
+### LessonPlan Validation
+
+`LessonPlanValidator` runs at file-open time, before the plan preview modal. It checks:
+- `version` ≤ `maxSupportedVersion` (currently 1)
+- Each step's `type` is a known value
+- Required fields present for each step type (e.g., `semitoneRange` for contour)
+- `foilStrategy`, if present, is a known value (`"distant"`, `"adjacent"`, `"random"`)
+
+On validation failure: show an alert with a specific error message. Stay on the currently-active plan. Never let a malformed plan silently load and crash mid-session.
+
+### .etplan File Type
+
+**UTI registration** (Info.plist):
+- Type identifier: `com.eartrain.etplan`
+- File extension: `.etplan`
+- Conforms to: `public.data`
+- Description: "EarTrain CI Lesson Plan"
+
+**File open handling**: `.onOpenURL` modifier on the SwiftUI `WindowGroup` scene (not `AppDelegate` — that method does not fire in SwiftUI lifecycle apps):
+
+```swift
+WindowGroup {
+    ContentView()
+}
+.onOpenURL { url in
+    lessonStore.load(from: url)
+}
+```
+
+**Plan preview modal**: when a `.etplan` file is opened, show a modal before starting:
+- Plan name, author, description
+- Step count and type summary ("3 steps: Contour → Identification → Intervals")
+- Start / Cancel buttons
+
+**Error handling**: if the file fails to parse (bad JSON, unknown version), show an alert with the filename. Stay on the currently-active plan. Never silently ignore failures.
+
+**Version migration**: the `version` field is checked on load. If `version > 1` (current max), show: "This plan requires a newer version of EarTrain CI." Unknown JSON fields are ignored (Codable default behavior).
+
+### Step Schema Reference
+
+See `.etplan` JSON schema in the CEO plan. Key fields:
+
+| Field | Type | Applies to | Meaning |
+|-------|------|-----------|---------|
+| `type` | String | all | `"contour"`, `"identification"`, `"intervals"` |
+| `trials` | Int | all | Number of attempts (fixed) or window size for passRate |
+| `passRate` | Float | all | Advance when correct/total ≥ value over last `trials` |
+| `streakToAdvance` | Int | all | Advance after N consecutive correct (alternative to passRate) |
+| `onPass` | String | all | `"next"` (default) |
+| `onFail` | String | all | `"repeat"` (default) |
+| `semitoneRange` | [Int, Int] | contour | Min/max semitone gap for two-note contour pairs |
+| `focusIntervals` | [String] | identification | Intervals to teach/quiz, e.g. `["P5", "P8"]` |
+| `foilStrategy` | String | identification | `"distant"` (far interval), `"adjacent"` (next semitone), `"random"`. Default: `"random"` on unknown value. |
+| `intervals` | [String] | intervals | Interval set for guitar-response mode |
+| `registers` | [String] | intervals | `"low"`, `"mid"`, `"high"` — restrict root range |
+
+Advancement: use exactly one of `passRate` or `streakToAdvance`. Omit both for fixed trial count.
+
+### Audiologist / Teacher View
+
+A separate window (File → "Open Session Data…") for reviewing a patient's data:
+
+1. **Open**: `NSOpenPanel` to select a folder. Patient zips and emails their `~/Library/Application Support/EarTrainCI/` folder; audiologist unzips and opens it via this dialog. Security-scoped bookmarks used for access.
+2. **Confusion matrix**: interval × register heatmap showing error rate per cell, built from `SessionLogger.CumulativeStats.matrix`. Each cell shows correct/total and error rate color-coded (green → red).
+3. **Export**:
+   - CSV: one row per trial across all session files (timestamp, interval, register, rootHz, detectedHz, result)
+   - JSON bundle: `cumulative.json` + all `sessions/*.json` files zipped
+4. **Read-only**. No session data can be modified through this view.
+
+### Confusion Matrix Visualization (Patient View)
+
+In the main app's Progress tab, an interval × register heatmap showing the patient's own confusion patterns:
+- Same cell structure as the audiologist view (interval rows × register columns)
+- Color: green = low error rate, amber = moderate, red = high
+- Cells with < 5 trials shown in muted style with "Not enough data" tooltip
+- Tap/click a cell for drill-down: trial count, accuracy trend, "Drill This" button
+
+### Bundled Starter Curricula
+
+Two `.etplan` files bundled in the app's Resources:
+- `beginner-ci.etplan`: Contour (large intervals, gentle ramp) → Identification (P5/P8 focus)
+- `intermediate.etplan`: Full pentatonic interval set, all three modes
+
+Loaded into a "Starter Plans" section in the plan picker on first launch.
+
+### Drill My Misses
+
+A built-in dynamic plan (not a static `.etplan` file) that reads `cumulative.json` and generates a focused session:
+
+- **Eligibility**: bucket must have ≥ 5 trials and error rate > 30%
+- **Session composition**: top N worst (interval, register) pairs, equal split between Identification and Playback steps
+- **Unavailable state**: greyed out with tooltip "Available after 5 attempts in each bucket (N/24 ready)"
+- Effort: L (reads live confusion data, generates step parameters programmatically)
+
+### Research Export
+
+From the audiologist view's Export button:
+- **CSV**: one row per trial — `timestamp,session_id,interval,register,rootHz,detectedHz,result` — ready for import into R or Python
+- **JSON bundle**: raw session files + cumulative summary, for reproducible analysis
+
 ## Technical Architecture
 
 **Platform targets:** macOS 13 (Ventura) minimum. Swift 5.9+. AudioKit 5.x via Swift Package Manager.
@@ -540,18 +734,33 @@ EarTrain (macOS SwiftUI app)
 3. **CI processor variants**: Won't do in MVP. The confusion matrix and drill logic work for any
    CI user. Processor-specific customization (Cochlear vs. MED-EL vs. Advanced Bionics channel
    mapping) is a potential future enhancement but not required for usefulness.
-4. **Timbre selection** (sine → acoustic guitar → clean electric → overdriven electric): Users
-   should be able to progress from the research-ideal pure sine tone toward real-world guitar
-   timbres as their training advances. Two implementation paths under consideration:
-   - **Karplus-Strong synthesis**: physically-modelled plucked string, no asset files, clean
-     electric comes naturally, distortion via soft-clip waveshaper. Prototype needed to evaluate
-     sound quality before committing.
-   - **Bundled samples**: FluidR3_GM soundfont (CC-BY 3.0) has acoustic steel, clean electric,
-     overdriven, and distortion guitar. Requires extracting per-note WAV files from the SF2 and
-     bundling ~20–40 samples per timbre; pitch-shifting fills the gaps. More realistic sound,
-     more asset management work.
-   Decision pending: build Karplus-Strong prototype first, compare against FluidR3_GM samples,
-   then choose.
+4. **Timbre selection — RESOLVED: bundled WAV samples from FluidR3_GM.**
+   Pure sine waves are hard to process for some CI users (confirmed by user testing). Guitar
+   timbres provide additional harmonic cues beyond the fundamental that improve interval
+   discrimination. This overrides the research recommendation for pure tones — if the stimulus
+   can't be discriminated, the training doesn't work.
+
+   **Chosen approach:** Per-note WAV samples extracted from FluidR3_GM.sf2 (CC-BY 3.0 license).
+   Three timbres: Acoustic Steel (GM #26), Electric Clean (GM #28), Overdriven (GM #30).
+   MIDI range: 40–81 (E2–A5), one file per semitone. 42 notes × 3 timbres = 126 WAV files, ~3–8 MB total.
+
+   **Extraction:** `scripts/extract_guitar_samples.py` — run once offline, output goes to
+   `EarTrain/Resources/Samples/`. Requires `fluidsynth` + `pyfluidsynth`.
+
+   **App implementation:** `SamplePlayer` class (replacing `IntervalPlayer`'s sine-wave path):
+   - Loads all WAV files as `AVAudioPCMBuffer` at startup (~5 MB, fast to load)
+   - Uses `AVAudioPlayerNode` attached to the shared `AVAudioEngine`
+   - `play(midiNote:timbre:duration:)` plays the buffer for the nearest semitone
+   - `playInterval(rootMidi:intervalMidi:timbre:)` sequences root + interval note
+   - Sine wave path kept in `IntervalPlayer` as the fallback (used when no samples loaded)
+   - Timbre is user-selectable in Settings: Sine / Acoustic / Clean Electric / Overdrive
+   - Default: Acoustic Steel (most natural for interval training)
+
+   **MIDI note conversion:** `NoteConverter.midiNote(fromHz:)` (static, rounds to nearest semitone).
+   ViewModels continue to work in Hz; `SamplePlayer` converts internally.
+
+   **Attribution:** FluidR3_GM is CC-BY 3.0. Add to app's About screen:
+   "Guitar samples from FluidR3_GM soundfont (CC-BY 3.0, Frank Wen / MuseScore)."
 
 ## Success Criteria
 
@@ -584,11 +793,10 @@ EarTrain (macOS SwiftUI app)
 
 Two researchers with existing relationships who could meaningfully shape this project.
 
-### Dr. Charles Limb — UCSF (https://ohns.ucsf.edu/charles-limb)
-Cochlear implant surgeon, musician, and researcher. His lab focuses specifically on music
-perception in CI users — one of the most prominent voices in this space. Prior email contact.
+### Researcher A — CI surgeon, musician, and researcher
+Focuses specifically on music perception in CI users. Prior email contact.
 
-**How he could help:**
+**How they could help:**
 - Validate or critique the training methodology against current clinical knowledge
 - Point to unpublished findings or ongoing research relevant to interval training
 - Identify whether the "confusion matrix as personal CI frequency map" long-term vision has
@@ -596,28 +804,26 @@ perception in CI users — one of the most prominent voices in this space. Prior
 - Lending credibility if you ever share the app with CI researchers or clinicians
 
 **Suggested approach:** Share the design doc (Research Foundation section in particular) and ask
-whether the training design is consistent with what his lab sees clinically. Specific question:
+whether the training design is consistent with what their lab sees clinically. Specific question:
 does adaptive interval drilling based on confusion patterns have precedent in CI rehab, or is
 this a novel approach?
 
-### Dr. Stacey Lim — Central Michigan University (https://www.cmich.edu/people/STACEY-R-LIM)
-Speech-language pathologist focused on auditory rehabilitation. CI recipient herself. Met and
-spoken with her multiple times — local contact.
+### Researcher B — Speech-language pathologist, auditory rehabilitation
+CI recipient. Local contact — met and spoken with multiple times.
 
-**How she could help:**
-- Co-design the training exercises from a clinical rehab perspective (she knows what works)
+**How they could help:**
+- Co-design the training exercises from a clinical rehab perspective
 - Early tester with both professional feedback (rehab specialist) and lived experience (CI user)
 - Validate the onboarding calibration approach against established auditory assessment methods
-- Potential path to other CI users who'd want to use the app (her patient or research population)
+- Potential path to other CI users who'd want to use the app
 - Clinical validation if you want to eventually share the app in a rehab context
 
 **Suggested approach:** This is the highest-leverage conversation to have early. Before writing
 code, share the problem statement and Phase 0/Phase 1 design and ask: "Does this match what your
 patients actually struggle with, and does the training approach reflect what works in your
-practice?" Her answer will catch gaps that no amount of literature review will find. She is also
-the most natural first beta user outside yourself.
+practice?" Their answer will catch gaps that no amount of literature review will find.
 
-**Priority:** Talk to Dr. Lim before finalizing the Phase 0 calibration design. Her clinical
+**Priority:** Talk to Researcher B before finalizing the Phase 0 calibration design. Their clinical
 experience with CI auditory assessment may suggest a better or more validated approach to
 seeding the confusion matrix than the one currently in the doc.
 

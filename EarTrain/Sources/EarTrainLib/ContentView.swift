@@ -51,8 +51,10 @@ public struct ContentView: View {
     @ViewBuilder
     private var modeContent: some View {
         switch mode {
-        case .intervals: ExerciseView()
-        case .contour:   ContourView()
+        case .intervals:      ExerciseView()
+        case .contour:        ContourView()
+        case .identification: IdentificationView()
+        case .settings:       SettingsView()
         }
     }
 }
@@ -62,11 +64,15 @@ public struct ContentView: View {
 public enum AppMode: CaseIterable {
     case intervals
     case contour
+    case identification
+    case settings
 
     public var label: String {
         switch self {
-        case .intervals: return "Intervals"
-        case .contour:   return "Higher / Lower / Same"
+        case .intervals:      return "Intervals"
+        case .contour:        return "Contour"
+        case .identification: return "Identify"
+        case .settings:       return "Settings"
         }
     }
 }
