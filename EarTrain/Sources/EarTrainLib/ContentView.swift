@@ -9,7 +9,7 @@ public struct ContentView: View {
     public var body: some View {
         Group {
             if mic.isAuthorized {
-                PitchMonitorView()
+                ExerciseView()
             } else if mic.isBlocked {
                 MicBlockedView(openSettings: mic.openSystemSettings)
             } else {

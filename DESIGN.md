@@ -199,6 +199,39 @@ background queue. Toggleable in Settings.
 
 ## Feature Roadmap
 
+### Phase 0 — Tuner
+
+A simple chromatic tuner available before every session. Guitar must be in tune for the
+app's pitch grading to be accurate — an out-of-tune guitar will be graded as wrong even
+when the user plays the correct interval.
+
+- Displays: detected note name, Hz readout, cents deviation needle (±50 cents, center = in tune)
+- Visual: needle/bar; green = within ±10 cents, amber = ±10–25 cents, red = >±25 cents
+- Infrastructure already built: `NoteConverter.centsDeviation(fromHz:)` + live `AudioEngineManager`
+- Lives in the sidebar nav as its own view (not a mode of ExerciseView)
+- Nav order: **Tune → Practice → Progress → Settings**
+
+### Phase 0 — Identification Mode ("Is this a m3?")
+
+Some users — particularly CI users new to interval training — need to learn what intervals
+*sound like* before they can play them back. This mode is listening-only, no guitar required.
+
+**Exercise loop:**
+1. App plays two notes (root + interval) as sine tones
+2. User sees the interval name on screen (e.g. "Minor 3rd")
+3. App plays it again with a label: "This is a Minor 3rd"
+4. Then presents: "Is this a Minor 3rd? **Yes / No**" and plays a new pair
+5. No wrong answer punishment — just immediate confirmation and next trial
+
+**Design rationale:** Users who have never consciously heard a m3 cannot play one back
+reliably. Identification training builds the perceptual category first. This is validated
+by the Phase 0 calibration research — the app must meet users where they are, not assume
+prior ear training.
+
+**When to use:** On first launch (or when user selects "Start with identification" in
+onboarding). Also available as a standalone mode for any session ("I want to review what
+intervals sound like before drilling").
+
 ### Phase 0 — Onboarding Assessment (first launch only)
 
 New users do a short diagnostic before any drills. Goal: seed the confusion matrix with enough
@@ -463,7 +496,8 @@ EarTrain (macOS SwiftUI app)
 │       ├── sessions/ — one file per practice session (includes schemaVersion: Int)
 │       └── cumulative.json — aggregated confusion matrix + progress (includes schemaVersion: Int)
 │           (schema versioning added now; migration needed if Result enum gains new cases)
-└── UI (SwiftUI) — 7 screens
+└── UI (SwiftUI) — 8 screens
+    ├── TunerView — chromatic tuner; cents deviation needle; pre-session utility
     ├── HomeView — start session, quick stats, "Drill My Misses" shortcut
     ├── SessionStartSheet — duration picker + mode toggle (modal over HomeView)
     ├── ExerciseView — active practice: play interval, listen, get feedback
