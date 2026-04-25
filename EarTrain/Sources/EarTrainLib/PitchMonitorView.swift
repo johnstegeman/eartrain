@@ -12,6 +12,7 @@ public struct PitchMonitorView: View {
             header
             pitchReadout
             amplitudeBar
+            playIntervalButton
             if let err = audio.engineError {
                 errorBanner(err)
             }
@@ -82,6 +83,28 @@ public struct PitchMonitorView: View {
         audio.amplitude > 0.25 ? EarTrainColors.error
             : audio.amplitude > 0.08 ? EarTrainColors.success
             : EarTrainColors.textDisabled
+    }
+
+    // MARK: - Interval playback test (step 4)
+
+    // Plays A4 → E5 (perfect fifth) as a quick audibility check.
+    private var playIntervalButton: some View {
+        Button {
+            Task {
+                await audio.intervalPlayer.playInterval(
+                    rootHz: 440.0,    // A4
+                    intervalHz: 659.25 // E5 — P5 above A4
+                )
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: audio.intervalPlayer.isPlaying ? "speaker.wave.2.fill" : "play.circle")
+                Text(audio.intervalPlayer.isPlaying ? "Playing…" : "Play A4 → E5 (P5)")
+            }
+            .font(.system(size: 14, weight: .semibold))
+        }
+        .buttonStyle(AccentButtonStyle())
+        .disabled(audio.intervalPlayer.isPlaying)
     }
 
     private func errorBanner(_ message: String) -> some View {
