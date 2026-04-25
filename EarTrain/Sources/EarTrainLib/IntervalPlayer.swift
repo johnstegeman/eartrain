@@ -70,12 +70,40 @@ public final class IntervalPlayer: ObservableObject {
 
     // MARK: - Playback
 
+    // MARK: - Equal-loudness compensation
+
+    /// A-weighting linear amplitude (un-dB'd).
+    /// Standard IEC 61672 coefficients.
+    private static func aWeightLinear(_ f: Float) -> Float {
+        let f2 = f * f
+        let f4 = f2 * f2
+        let num: Float = 12194 * 12194 * f4
+        let d1 = f2 + 20.6 * 20.6
+        let d2 = (f2 + 107.7 * 107.7) * (f2 + 737.9 * 737.9)
+        let d3 = f2 + 12194 * 12194
+        return num / (d1 * d2.squareRoot() * d3)
+    }
+
+    /// Scales `base` amplitude so all frequencies sound equally loud.
+    /// Normalized to 440 Hz; clamped to [0.5×, 2.0×] to avoid distortion
+    /// at the extremes of the guitar range.
+    static func equalLoudnessAmplitude(hz: Float, base: Float) -> Float {
+        let w440 = aWeightLinear(440)
+        let wHz  = aWeightLinear(hz)
+        guard wHz > 0, w440 > 0 else { return base }
+        let factor = max(0.5, min(w440 / wHz, 2.0))
+        return base * factor
+    }
+
+    // MARK: - Playback
+
     /// Play a single tone at `hz` for `duration` seconds.
-    /// The smoother handles fade-in and fade-out automatically.
+    /// Amplitude is equal-loudness compensated so all pitches sound the
+    /// same volume regardless of frequency.
     @MainActor
     public func play(hz: Float, duration: TimeInterval, amplitude: Float = 0.35) async {
         state.frequency = hz
-        state.targetAmplitude = amplitude
+        state.targetAmplitude = Self.equalLoudnessAmplitude(hz: hz, base: amplitude)
         isPlaying = true
         try? await Task.sleep(for: .seconds(duration))
         state.targetAmplitude = 0
