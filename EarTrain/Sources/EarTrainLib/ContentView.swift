@@ -3,13 +3,18 @@ import AVFoundation
 
 public struct ContentView: View {
     @StateObject private var mic = MicrophonePermissionManager()
+    @State private var mode: AppMode = .intervals
 
     public init() {}
 
     public var body: some View {
         Group {
             if mic.isAuthorized {
-                ExerciseView()
+                VStack(spacing: 0) {
+                    modePicker
+                    Divider().background(EarTrainColors.surface)
+                    modeContent
+                }
             } else if mic.isBlocked {
                 MicBlockedView(openSettings: mic.openSystemSettings)
             } else {
@@ -20,6 +25,39 @@ public struct ContentView: View {
         .background(EarTrainColors.bg)
         .task {
             await mic.requestIfNeeded()
+        }
+    }
+
+    private var modePicker: some View {
+        Picker("Mode", selection: $mode) {
+            ForEach(AppMode.allCases, id: \.self) { m in
+                Text(m.label).tag(m)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private var modeContent: some View {
+        switch mode {
+        case .intervals: ExerciseView()
+        case .contour:   ContourView()
+        }
+    }
+}
+
+// MARK: - App mode
+
+public enum AppMode: CaseIterable {
+    case intervals
+    case contour
+
+    public var label: String {
+        switch self {
+        case .intervals: return "Intervals"
+        case .contour:   return "Higher / Lower / Same"
         }
     }
 }
