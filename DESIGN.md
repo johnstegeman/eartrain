@@ -289,6 +289,33 @@ register"). Then: "Start your first session" CTA. Makes the calibration feel mea
 - **Progression logic**: future versions can auto-reduce hints as accuracy improves in a
   bucket (e.g., turn off after 3 consecutive correct in the same bucket). Not in Phase 1.
 
+### Phase 1 — Session Duration
+
+Users choose how long they want to practice before each session starts. This sets pacing
+expectations and keeps sessions from feeling open-ended.
+
+**Session Start Sheet** (modal presented when tapping "Start Session" from HomeView):
+- Duration grid: **5 min** (~15 exercises) / **10 min** (~30 exercises) / **20 min** (~60 exercises) / **30 min** (~90 exercises) / **Custom** (free-entry in minutes)
+- Approximate exercise counts based on ~2-3 minutes average per exercise (including playback + response + feedback delay)
+- Pre-selects the last-used duration
+- Mode toggle: **Standard** (random from active interval set) / **Drill My Misses** (weighted toward weak buckets; greyed out with tooltip if fewer than 5 trials per bucket)
+- Quick settings summary row showing active root note, interval set, and register range — tap to open Settings without closing the sheet
+- "Start" button launches ExerciseView with session_duration set
+
+**During session (ExerciseView)**:
+- Time badge in header: "14:32 remaining" — updates every second
+- Progress bar below header: fills left-to-right as time elapses
+- No hard stop at time limit: if an exercise is in progress when time expires, it completes naturally
+- At time limit: "Session complete" banner appears; user can finish current exercise then tap "End Session" or keep going
+
+**End of Session screen** (shown after last exercise when time has expired, or when user taps "End Session"):
+- Stats grid: accuracy this session / delta vs. previous session (↑↓ with color) / total practice time cumulative
+- "What this session revealed" panel: 2-3 highest-error buckets from this session only (e.g., "m3 in the low register: 3/8 correct")
+- CTA buttons: "View Progress" (ProgressView) / "Start Another Session" (back to HomeView)
+- Session auto-saved before screen appears; data visible in ProgressView immediately
+
+**Persistence**: `session_duration` and last-selected `mode` stored in `cumulative.json` preferences block (alongside root note, interval set). Pre-selected on next launch.
+
 ### Phase 2 — Melody Echo
 - App plays a short melody (3-8 notes) in a chosen key
 - User plays it back on guitar
@@ -296,6 +323,10 @@ register"). Then: "Start your first session" CTA. Makes the calibration feel mea
 - Builds on the same pitch detection + register bucketing from Phase 1
 
 ## UI Design System
+
+**Approved mockups**: `designs/wireframes.html` in this repo. Open in any browser for
+all 7 screens: HomeView, Session Start Sheet, ExerciseView (with time badge), ProgressView,
+SettingsView, Phase 0 Onboarding, and End of Session.
 
 ### Colors (SwiftUI Color assets)
 All dark-mode only in Phase 1. Light mode is a future enhancement.
@@ -426,10 +457,12 @@ EarTrain (macOS SwiftUI app)
 │       ├── sessions/ — one file per practice session (includes schemaVersion: Int)
 │       └── cumulative.json — aggregated confusion matrix + progress (includes schemaVersion: Int)
 │           (schema versioning added now; migration needed if Result enum gains new cases)
-└── UI (SwiftUI) — 5 screens
+└── UI (SwiftUI) — 7 screens
     ├── HomeView — start session, quick stats, "Drill My Misses" shortcut
+    ├── SessionStartSheet — duration picker + mode toggle (modal over HomeView)
     ├── ExerciseView — active practice: play interval, listen, get feedback
     ├── FeedbackView — per-attempt result (modal/inline after each response)
+    ├── EndOfSessionView — session stats + insights + CTAs (shown at session end)
     ├── ProgressView — confusion matrix heatmap + accuracy trend over time
     └── SettingsView — input device, interval set, register range, keep-alive toggle,
                        audio buffer size (128/256/512 samples — Advanced section)

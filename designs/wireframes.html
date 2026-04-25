@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EarTrain CI — Design Wireframes</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #111; color: #e0e0e0; font-family: -apple-system, "SF Pro Display", BlinkMacSystemFont, sans-serif; font-size: 14px; }
+
+  .tabs { display: flex; background: #1a1a1a; border-bottom: 1px solid #333; padding: 0 16px; flex-wrap: wrap; }
+  .tab { padding: 12px 18px; cursor: pointer; color: #888; border-bottom: 2px solid transparent; font-size: 13px; font-weight: 500; transition: all 0.15s; white-space: nowrap; }
+  .tab.active { color: #f5a623; border-bottom-color: #f5a623; }
+  .tab:hover { color: #ccc; }
+
+  .app-shell { display: flex; height: calc(100vh - 44px); }
+
+  .sidebar { width: 200px; background: #1c1c1e; border-right: 1px solid #2d2d2d; padding: 16px 0; flex-shrink: 0; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: #888; cursor: pointer; border-radius: 6px; margin: 2px 8px; font-size: 13px; }
+  .sidebar-item.active { background: rgba(245,166,35,0.15); color: #f5a623; }
+  .sidebar-item:hover { background: #2a2a2a; color: #ccc; }
+  .sidebar-icon { width: 18px; height: 18px; font-size: 16px; text-align: center; flex-shrink: 0; }
+  .sidebar-divider { height: 1px; background: #2d2d2d; margin: 8px 16px; }
+  .app-name { padding: 8px 16px 16px; font-size: 12px; font-weight: 600; color: #555; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  .main { flex: 1; overflow-y: auto; background: #1a1a1a; }
+  .screen { display: none; height: 100%; }
+  .screen.active { display: block; }
+
+  .card { background: #232323; border: 1px solid #2d2d2d; border-radius: 10px; padding: 20px; }
+  .card-title { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+  .screen-label { padding: 8px 24px; background: #161616; border-bottom: 1px solid #2d2d2d; font-size: 11px; color: #555; display: flex; align-items: center; gap: 8px; }
+  .screen-label strong { color: #f5a623; }
+  .screen-label .badge { background: #2d2d2d; border-radius: 10px; padding: 2px 8px; font-size: 10px; }
+
+  /* ============================  HOME VIEW  ============================ */
+  .home-screen { padding: 24px; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto auto; gap: 16px; }
+  .home-hero { grid-column: 1 / -1; background: linear-gradient(135deg, #232323 0%, #1a2030 100%); border: 1px solid #2d3a50; border-radius: 12px; padding: 28px 32px; display: flex; align-items: center; justify-content: space-between; }
+  .home-hero-text h1 { font-size: 24px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+  .home-hero-text p { color: #888; font-size: 14px; }
+  .home-hero-actions { display: flex; gap: 12px; }
+  .btn-primary { background: #f5a623; color: #1a1a1a; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-secondary { background: transparent; color: #f5a623; border: 1px solid #f5a623; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-secondary.dim { color: #555; border-color: #333; cursor: default; }
+  .stats-row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat-card { background: #232323; border: 1px solid #2d2d2d; border-radius: 10px; padding: 16px 20px; }
+  .stat-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .stat-value { font-size: 28px; font-weight: 700; color: #fff; }
+  .stat-value.good { color: #4ade80; }
+  .stat-value.warn { color: #f5a623; }
+  .stat-sub { font-size: 11px; color: #555; margin-top: 4px; }
+  .recent-sessions { background: #232323; border: 1px solid #2d2d2d; border-radius: 10px; padding: 20px; }
+  .session-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #2d2d2d; }
+  .session-row:last-child { border-bottom: none; }
+  .session-date { font-size: 12px; color: #888; }
+  .session-accuracy { font-size: 14px; font-weight: 600; }
+  .session-accuracy.good { color: #4ade80; }
+  .session-accuracy.mid { color: #f5a623; }
+  .session-detail { font-size: 11px; color: #555; }
+  .interval-focus { background: #232323; border: 1px solid #2d2d2d; border-radius: 10px; padding: 20px; }
+  .interval-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; }
+  .interval-name { font-size: 13px; }
+  .interval-bar-wrap { flex: 1; margin: 0 12px; background: #2d2d2d; border-radius: 4px; height: 6px; overflow: hidden; }
+  .interval-bar { height: 100%; border-radius: 4px; background: #f5a623; }
+  .interval-bar.bad { background: #ef4444; }
+  .interval-bar.ok { background: #f5a623; }
+  .interval-bar.good { background: #4ade80; }
+  .interval-pct { font-size: 12px; color: #888; width: 36px; text-align: right; }
+
+  /* ============================  SESSION START SHEET  ============================ */
+  .sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .sheet { background: #232323; border: 1px solid #3d3d3d; border-radius: 16px; padding: 32px; width: 480px; max-width: 95vw; }
+  .sheet-title { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .sheet-sub { font-size: 14px; color: #888; margin-bottom: 28px; line-height: 1.5; }
+  .duration-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .duration-option { border: 2px solid #3d3d3d; border-radius: 10px; padding: 16px; cursor: pointer; transition: all 0.15s; text-align: center; position: relative; }
+  .duration-option:hover { border-color: #888; }
+  .duration-option.selected { border-color: #f5a623; background: rgba(245,166,35,0.07); }
+  .duration-option .dur-time { font-size: 22px; font-weight: 800; color: #fff; }
+  .duration-option .dur-label { font-size: 11px; color: #666; margin-top: 4px; }
+  .duration-option .dur-trials { font-size: 11px; color: #555; margin-top: 6px; }
+  .duration-option.selected .dur-trials { color: #f5a623; }
+  .duration-option .rec-badge { position: absolute; top: -8px; right: 10px; background: #f5a623; color: #1a1a1a; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 10px; letter-spacing: 0.04em; }
+  .custom-row { border: 2px solid #3d3d3d; border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; margin-bottom: 24px; }
+  .custom-row:hover { border-color: #888; }
+  .custom-row .cur-label { font-size: 14px; color: #888; }
+  .custom-input { background: #2a2a2a; border: 1px solid #3d3d3d; border-radius: 6px; padding: 6px 10px; font-size: 14px; color: #e0e0e0; width: 80px; text-align: right; }
+  .sheet-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .btn-ghost { background: transparent; border: 1px solid #3d3d3d; color: #888; padding: 10px 20px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+  .sheet-mode-toggle { display: flex; gap: 8px; margin-bottom: 20px; }
+  .mode-chip { padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid #3d3d3d; color: #888; }
+  .mode-chip.active { background: rgba(245,166,35,0.15); border-color: rgba(245,166,35,0.5); color: #f5a623; }
+
+  /* ============================  EXERCISE VIEW  ============================ */
+  .exercise-screen { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .exercise-header { display: flex; justify-content: space-between; align-items: center; }
+  .exercise-header h2 { font-size: 18px; font-weight: 700; }
+  .session-meta { display: flex; gap: 12px; align-items: center; }
+  .session-badge { background: #232323; border: 1px solid #2d2d2d; border-radius: 20px; padding: 6px 14px; font-size: 12px; color: #888; }
+  .session-badge span { color: #f5a623; font-weight: 600; }
+  .time-badge { background: #232323; border: 1px solid #2d2d2d; border-radius: 20px; padding: 6px 14px; font-size: 12px; color: #888; display: flex; align-items: center; gap: 6px; }
+  .time-badge .time-remaining { color: #f5a623; font-weight: 600; }
+  .time-badge .time-bar { width: 60px; height: 4px; background: #3d3d3d; border-radius: 2px; overflow: hidden; }
+  .time-bar-fill { height: 100%; background: #f5a623; border-radius: 2px; }
+  .exercise-body { display: grid; grid-template-columns: 280px 1fr; gap: 16px; flex: 1; }
+  .interval-card { background: #232323; border: 1px solid #2d2d2d; border-radius: 12px; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+  .interval-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.08em; }
+  .interval-display { font-size: 42px; font-weight: 800; color: #fff; }
+  .interval-semitones { font-size: 13px; color: #888; }
+  .play-btn { width: 72px; height: 72px; border-radius: 50%; background: #f5a623; border: none; font-size: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #1a1a1a; }
+  .play-hint { font-size: 11px; color: #555; text-align: center; }
+  .root-note { background: #2a2a2a; border: 1px solid #333; border-radius: 8px; padding: 8px 16px; font-size: 13px; color: #888; }
+  .root-note span { color: #e0e0e0; font-weight: 600; }
+  .kbd-hint { font-size: 11px; color: #444; margin-top: 4px; }
+  .kbd { background: #2a2a2a; border: 1px solid #3d3d3d; border-radius: 4px; padding: 2px 6px; font-size: 10px; color: #888; font-family: monospace; }
+  .fretboard-card { background: #232323; border: 1px solid #2d2d2d; border-radius: 12px; padding: 20px; }
+  .fretboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .fretboard-title { font-size: 13px; font-weight: 600; color: #888; }
+  .fretboard-toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #555; }
+  .toggle-switch { width: 32px; height: 18px; background: #4ade80; border-radius: 9px; position: relative; cursor: pointer; }
+  .toggle-switch::after { content: ''; position: absolute; top: 2px; right: 2px; width: 14px; height: 14px; background: #fff; border-radius: 50%; }
+  .pitch-card { background: #232323; border: 1px solid #2d2d2d; border-radius: 12px; padding: 20px; }
+  .pitch-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .pitch-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.08em; }
+  .pitch-status { font-size: 11px; color: #4ade80; }
+  .listening-anim { display: flex; align-items: flex-end; gap: 3px; height: 32px; }
+  .listening-bar { width: 4px; background: #f5a623; border-radius: 2px; animation: wave 1.2s ease-in-out infinite; }
+  .listening-bar:nth-child(2) { animation-delay: 0.15s; }
+  .listening-bar:nth-child(3) { animation-delay: 0.3s; }
+  .listening-bar:nth-child(4) { animation-delay: 0.45s; }
+  .listening-bar:nth-child(5) { animation-delay: 0.6s; }
+  @keyframes wave { 0%, 100% { height: 8px; } 50% { height: 28px; } }
+  .feedback-card { background: #1d2a1d; border: 1px solid #2d4a2d; border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; }
+  .feedback-card.wrong { background: #2a1d1d; border-color: #4a2d2d; }
+  .feedback-card.close { background: #2a241d; border-color: #4a3a2d; }
+  .feedback-icon { font-size: 28px; }
+  .feedback-text h3 { font-size: 16px; font-weight: 700; color: #4ade80; }
+  .feedback-text.wrong h3 { color: #ef4444; }
+  .feedback-text.close h3 { color: #f5a623; }
+  .feedback-sub { font-size: 12px; color: #888; margin-top: 4px; }
+  .auto-advance { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .advance-timer { font-size: 11px; color: #555; }
+  .advance-bar { width: 48px; height: 4px; background: #3d3d3d; border-radius: 2px; overflow: hidden; }
+  .advance-fill { height: 100%; background: #4ade80; border-radius: 2px; animation: drain 2s linear forwards; }
+  @keyframes drain { from { width: 100%; } to { width: 0%; } }
+
+  /* ============================  PROGRESS VIEW  ============================ */
+  .progress-screen { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .progress-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .heatmap-card { background: #232323; border: 1px solid #2d2d2d; border-radius: 12px; padding: 20px; grid-column: 1 / -1; }
+  .heatmap-table { width: 100%; border-collapse: separate; border-spacing: 4px; margin-top: 16px; }
+  .heatmap-table th { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.06em; padding: 4px 8px; text-align: center; }
+  .heatmap-table td { border-radius: 6px; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; }
+  .heatmap-cell { width: 72px; height: 44px; }
+  .hm-good { background: rgba(74,222,128,0.25); color: #4ade80; }
+  .hm-ok { background: rgba(245,166,35,0.25); color: #f5a623; }
+  .hm-bad { background: rgba(239,68,68,0.3); color: #ef4444; }
+  .hm-empty { background: #2a2a2a; color: #444; }
+  .heatmap-legend { display: flex; gap: 16px; margin-top: 12px; justify-content: flex-end; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #666; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+  .trend-card { background: #232323; border: 1px solid #2d2d2d; border-radius: 12px; padding: 20px; }
+  .chart-placeholder { background: #1a1a1a; border-radius: 8px; height: 160px; display: flex; align-items: flex-end; padding: 12px; gap: 8px; margin-top: 12px; }
+  .chart-bar { flex: 1; border-radius: 4px 4px 0 0; }
+  .session-summary { background: #232323; border: 1px solid #2d2d2d; border-radius: 12px; padding: 20px; }
+  .milestone-badge { background: rgba(245,166,35,0.15); border: 1px solid rgba(245,166,35,0.3); border-radius: 20px; padding: 6px 14px; font-size: 12px; color: #f5a623; display: inline-flex; align-items: center; gap: 6px; }
+
+  /* ============================  SETTINGS VIEW  ============================ */
+  .settings-screen { padding: 24px; max-width: 640px; }
+  .settings-screen h2 { font-size: 20px; font-weight: 700; margin-bottom: 24px; }
+  .settings-section { margin-bottom: 24px; }
+  .settings-section-title { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #2d2d2d; }
+  .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #222; }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label { font-size: 14px; }
+  .setting-sub { font-size: 12px; color: #555; margin-top: 3px; }
+  .setting-control { display: flex; align-items: center; gap: 8px; }
+  .select-mock { background: #2a2a2a; border: 1px solid #3d3d3d; color: #e0e0e0; padding: 6px 12px; border-radius: 6px; font-size: 13px; min-width: 140px; text-align: right; }
+  .toggle-on { width: 40px; height: 22px; background: #4ade80; border-radius: 11px; position: relative; cursor: pointer; }
+  .toggle-on::after { content: ''; position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; background: #fff; border-radius: 50%; }
+  .toggle-off { width: 40px; height: 22px; background: #3d3d3d; border-radius: 11px; position: relative; cursor: pointer; }
+  .toggle-off::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: #888; border-radius: 50%; }
+  .interval-checklist { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .interval-chip { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .interval-chip.on { background: rgba(245,166,35,0.2); border: 1px solid rgba(245,166,35,0.5); color: #f5a623; }
+  .interval-chip.off { background: #2a2a2a; border: 1px solid #3d3d3d; color: #555; }
+  .danger-zone { margin-top: 32px; padding: 16px; border: 1px solid #4a2d2d; border-radius: 10px; }
+  .danger-title { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+  .btn-danger { background: transparent; border: 1px solid #ef4444; color: #ef4444; padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+
+  /* ============================  ONBOARDING  ============================ */
+  .onboarding-screen { padding: 0; display: flex; height: 100%; }
+  .onboarding-center { max-width: 560px; margin: auto; padding: 48px 32px; text-align: center; }
+  .onboarding-step { font-size: 12px; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px; }
+  .onboarding-h1 { font-size: 28px; font-weight: 800; margin-bottom: 12px; }
+  .onboarding-sub { font-size: 15px; color: #888; margin-bottom: 36px; line-height: 1.6; }
+  .onboarding-progress { display: flex; gap: 6px; justify-content: center; margin-bottom: 36px; }
+  .prog-dot { width: 8px; height: 8px; border-radius: 50%; background: #2d2d2d; }
+  .prog-dot.done { background: #f5a623; }
+  .prog-dot.current { background: #fff; }
+  .interval-pair { display: flex; gap: 24px; justify-content: center; margin-bottom: 36px; }
+  .interval-option { flex: 1; max-width: 200px; background: #232323; border: 2px solid #333; border-radius: 12px; padding: 24px; cursor: pointer; text-align: center; }
+  .interval-option:hover { border-color: #f5a623; }
+  .interval-option .play-small { font-size: 20px; margin-bottom: 12px; }
+  .interval-option .name { font-size: 16px; font-weight: 700; }
+  .interval-option .semitones { font-size: 12px; color: #666; margin-top: 4px; }
+  .onboarding-hint { font-size: 12px; color: #555; margin-top: 24px; }
+
+  /* ============================  END OF SESSION  ============================ */
+  .end-screen { padding: 0; display: flex; height: 100%; }
+  .end-center { max-width: 560px; margin: auto; padding: 48px 32px; text-align: center; }
+  .end-icon { font-size: 48px; margin-bottom: 16px; }
+  .end-h1 { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
+  .end-sub { font-size: 15px; color: #888; margin-bottom: 32px; }
+  .end-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 32px; text-align: center; }
+  .end-stat { background: #232323; border: 1px solid #2d2d2d; border-radius: 10px; padding: 16px; }
+  .end-stat-val { font-size: 26px; font-weight: 800; }
+  .end-stat-val.good { color: #4ade80; }
+  .end-stat-val.warn { color: #f5a623; }
+  .end-stat-lbl { font-size: 11px; color: #555; margin-top: 4px; }
+  .end-insight { background: #232323; border: 1px solid #2d2d2d; border-radius: 10px; padding: 16px 20px; margin-bottom: 24px; text-align: left; }
+  .end-insight-title { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  .end-insight-text { font-size: 14px; color: #e0e0e0; line-height: 1.6; }
+  .end-insight-text strong { color: #f5a623; }
+  .end-actions { display: flex; gap: 12px; justify-content: center; }
+  .btn-outline { background: transparent; border: 1px solid #3d3d3d; color: #e0e0e0; padding: 12px 24px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <div class="tab active" onclick="show('home', this)">HomeView</div>
+  <div class="tab" onclick="show('session-start', this)">Session Start Sheet</div>
+  <div class="tab" onclick="show('exercise', this)">ExerciseView</div>
+  <div class="tab" onclick="show('progress', this)">ProgressView</div>
+  <div class="tab" onclick="show('settings', this)">SettingsView</div>
+  <div class="tab" onclick="show('onboarding', this)">Phase 0 Onboarding</div>
+  <div class="tab" onclick="show('end-session', this)">End of Session</div>
+</div>
+
+<!-- ============================================================  HOME VIEW  -->
+<div id="home" class="screen active">
+  <div class="app-shell">
+    <div class="sidebar">
+      <div class="app-name">EarTrain CI</div>
+      <div class="sidebar-item active"><span class="sidebar-icon">⌂</span> Home</div>
+      <div class="sidebar-item"><span class="sidebar-icon">♪</span> Exercise</div>
+      <div class="sidebar-item"><span class="sidebar-icon">◎</span> Progress</div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-item"><span class="sidebar-icon">⚙</span> Settings</div>
+    </div>
+    <div class="main">
+      <div class="screen-label">Screen: <strong>HomeView</strong> <span class="badge">Clicking "Start Session" opens the Session Start Sheet</span></div>
+      <div class="home-screen">
+        <div class="home-hero">
+          <div class="home-hero-text">
+            <h1>Ready to practice?</h1>
+            <p>Last session: 67% accuracy · 12 attempts · April 25</p>
+          </div>
+          <div class="home-hero-actions">
+            <button class="btn-secondary">🎯 Drill My Misses</button>
+            <button class="btn-primary" onclick="show('session-start', document.querySelectorAll('.tab')[1])">Start Session ▶</button>
+          </div>
+        </div>
+        <div class="stats-row">
+          <div class="stat-card"><div class="stat-label">Total Sessions</div><div class="stat-value">7</div><div class="stat-sub">Started Apr 23</div></div>
+          <div class="stat-card"><div class="stat-label">Best Interval</div><div class="stat-value good">P8</div><div class="stat-sub">Octave · 89%</div></div>
+          <div class="stat-card"><div class="stat-label">Needs Work</div><div class="stat-value warn">m3</div><div class="stat-sub">Minor third · 41%</div></div>
+          <div class="stat-card"><div class="stat-label">Practice Time</div><div class="stat-value">2.4h</div><div class="stat-sub">of 12h milestone</div></div>
+        </div>
+        <div class="recent-sessions card">
+          <div class="card-title">Recent Sessions</div>
+          <div class="session-row"><div><div class="session-date">Apr 25 · 11:30 AM · 14 min</div><div class="session-detail">28 attempts · m3, M3, P4, P5</div></div><div class="session-accuracy mid">67%</div></div>
+          <div class="session-row"><div><div class="session-date">Apr 24 · 7:15 PM · 10 min</div><div class="session-detail">24 attempts · m3, M3</div></div><div class="session-accuracy mid">58%</div></div>
+          <div class="session-row"><div><div class="session-date">Apr 23 · 6:00 PM · 20 min</div><div class="session-detail">20 attempts · all intervals</div></div><div class="session-accuracy good">72%</div></div>
+        </div>
+        <div class="interval-focus card">
+          <div class="card-title">Interval Accuracy (all sessions)</div>
+          <div class="interval-row"><span class="interval-name">m3 (minor third)</span><div class="interval-bar-wrap"><div class="interval-bar bad" style="width:41%"></div></div><span class="interval-pct" style="color:#ef4444">41%</span></div>
+          <div class="interval-row"><span class="interval-name">M3 (major third)</span><div class="interval-bar-wrap"><div class="interval-bar ok" style="width:55%"></div></div><span class="interval-pct" style="color:#f5a623">55%</span></div>
+          <div class="interval-row"><span class="interval-name">P5 (perfect fifth)</span><div class="interval-bar-wrap"><div class="interval-bar ok" style="width:63%"></div></div><span class="interval-pct" style="color:#f5a623">63%</span></div>
+          <div class="interval-row"><span class="interval-name">P4 (perfect fourth)</span><div class="interval-bar-wrap"><div class="interval-bar ok" style="width:68%"></div></div><span class="interval-pct" style="color:#f5a623">68%</span></div>
+          <div class="interval-row"><span class="interval-name">M2 (major second)</span><div class="interval-bar-wrap"><div class="interval-bar good" style="width:78%"></div></div><span class="interval-pct" style="color:#4ade80">78%</span></div>
+          <div class="interval-row"><span class="interval-name">P8 (octave)</span><div class="interval-bar-wrap"><div class="interval-bar good" style="width:89%"></div></div><span class="interval-pct" style="color:#4ade80">89%</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================  SESSION START SHEET  -->
+<div id="session-start" class="screen">
+  <div class="app-shell">
+    <div class="sidebar" style="opacity:0.4; pointer-events:none;">
+      <div class="app-name">EarTrain CI</div>
+      <div class="sidebar-item active"><span class="sidebar-icon">⌂</span> Home</div>
+      <div class="sidebar-item"><span class="sidebar-icon">♪</span> Exercise</div>
+      <div class="sidebar-item"><span class="sidebar-icon">◎</span> Progress</div>
+    </div>
+    <div class="main" style="position:relative; filter:blur(2px) brightness(0.5); pointer-events:none;">
+      <div class="home-screen" style="padding:24px;">
+        <div class="home-hero"><div class="home-hero-text"><h1>Ready to practice?</h1></div></div>
+      </div>
+    </div>
+    <!-- Sheet overlaid on the blurred content -->
+    <div class="sheet-overlay" style="position:absolute; inset:0;">
+      <div class="sheet">
+        <div class="sheet-title">Start a session</div>
+        <div class="sheet-sub">How long do you want to practice? The app will pace the exercises to fit your time and prioritize your weakest intervals.</div>
+
+        <div class="sheet-mode-toggle">
+          <div class="mode-chip active">Standard</div>
+          <div class="mode-chip">Drill My Misses</div>
+        </div>
+
+        <div class="duration-grid">
+          <div class="duration-option">
+            <div class="dur-time">5 min</div>
+            <div class="dur-label">Quick warmup</div>
+            <div class="dur-trials">~15 exercises</div>
+          </div>
+          <div class="duration-option selected">
+            <div class="rec-badge">LAST USED</div>
+            <div class="dur-time">10 min</div>
+            <div class="dur-label">Short session</div>
+            <div class="dur-trials">~30 exercises</div>
+          </div>
+          <div class="duration-option">
+            <div class="dur-time">20 min</div>
+            <div class="dur-label">Standard practice</div>
+            <div class="dur-trials">~60 exercises</div>
+          </div>
+          <div class="duration-option">
+            <div class="dur-time">30 min</div>
+            <div class="dur-label">Deep practice</div>
+            <div class="dur-trials">~90 exercises</div>
+          </div>
+        </div>
+
+        <div class="custom-row">
+          <span class="cur-label">Custom duration</span>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input class="custom-input" type="number" value="15" min="1" max="120"> <span style="font-size:13px; color:#888;">min</span>
+          </div>
+        </div>
+
+        <div style="font-size:12px; color:#555; margin-bottom:20px; padding:12px 14px; background:#1a1a1a; border-radius:8px;">
+          <strong style="color:#888;">Root note:</strong> A · <strong style="color:#888;">Intervals:</strong> all pentatonic · <strong style="color:#888;">Hints:</strong> on
+          <span style="color:#f5a623; cursor:pointer; margin-left:8px;">Change settings</span>
+        </div>
+
+        <div class="sheet-actions">
+          <button class="btn-ghost" onclick="show('home', document.querySelectorAll('.tab')[0])">Cancel</button>
+          <button class="btn-primary" onclick="show('exercise', document.querySelectorAll('.tab')[2])">Start 10 min session ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================  EXERCISE VIEW  -->
+<div id="exercise" class="screen">
+  <div class="app-shell">
+    <div class="sidebar">
+      <div class="app-name">EarTrain CI</div>
+      <div class="sidebar-item"><span class="sidebar-icon">⌂</span> Home</div>
+      <div class="sidebar-item active"><span class="sidebar-icon">♪</span> Exercise</div>
+      <div class="sidebar-item"><span class="sidebar-icon">◎</span> Progress</div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-item"><span class="sidebar-icon">⚙</span> Settings</div>
+    </div>
+    <div class="main">
+      <div class="screen-label">Screen: <strong>ExerciseView</strong> <span class="badge">Hands-free: audio cue + auto-advance · Space skips delay</span></div>
+      <div class="exercise-screen">
+        <div class="exercise-header">
+          <h2>Interval Training</h2>
+          <div class="session-meta">
+            <div class="session-badge">Attempt <span>7</span> of ~30 · <span>57%</span> this session</div>
+            <div class="time-badge">
+              <span>⏱</span>
+              <span class="time-remaining">6:42</span> left
+              <div class="time-bar"><div class="time-bar-fill" style="width: 67%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="exercise-body">
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div class="interval-card">
+              <div class="interval-label">Target interval</div>
+              <div class="interval-display">P4</div>
+              <div class="interval-semitones">Perfect Fourth · 5 semitones</div>
+              <button class="play-btn">▶</button>
+              <div class="play-hint">Press to hear root + interval<br>as sine tones</div>
+              <div class="kbd-hint"><span class="kbd">Return</span> to replay</div>
+              <div class="root-note">Root: <span>A3</span></div>
+            </div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div class="fretboard-card">
+              <div class="fretboard-header">
+                <div class="fretboard-title">Where to play it</div>
+                <div class="fretboard-toggle">
+                  <span>Show hints</span>
+                  <div class="toggle-switch"></div>
+                </div>
+              </div>
+              <svg viewBox="0 0 520 120" style="width:100%; margin-top:8px;">
+                <rect x="30" y="10" width="4" height="100" fill="#888"/>
+                <line x1="80" y1="10" x2="80" y2="110" stroke="#3d3d3d" stroke-width="1.5"/>
+                <line x1="130" y1="10" x2="130" y2="110" stroke="#3d3d3d" stroke-width="1.5"/>
+                <line x1="180" y1="10" x2="180" y2="110" stroke="#3d3d3d" stroke-width="1.5"/>
+                <line x1="230" y1="10" x2="230" y2="110" stroke="#3d3d3d" stroke-width="1.5"/>
+                <line x1="280" y1="10" x2="280" y2="110" stroke="#3d3d3d" stroke-width="1.5"/>
+                <line x1="330" y1="10" x2="330" y2="110" stroke="#3d3d3d" stroke-width="1.5"/>
+                <line x1="380" y1="10" x2="380" y2="110" stroke="#3d3d3d" stroke-width="1.5"/>
+                <line x1="430" y1="10" x2="430" y2="110" stroke="#3d3d3d" stroke-width="1.5"/>
+                <line x1="480" y1="10" x2="480" y2="110" stroke="#3d3d3d" stroke-width="1.5"/>
+                <line x1="34" y1="20" x2="515" y2="20" stroke="#666" stroke-width="2"/>
+                <line x1="34" y1="36" x2="515" y2="36" stroke="#666" stroke-width="1.8"/>
+                <line x1="34" y1="52" x2="515" y2="52" stroke="#666" stroke-width="1.6"/>
+                <line x1="34" y1="68" x2="515" y2="68" stroke="#666" stroke-width="1.4"/>
+                <line x1="34" y1="84" x2="515" y2="84" stroke="#666" stroke-width="1.2"/>
+                <line x1="34" y1="100" x2="515" y2="100" stroke="#666" stroke-width="1"/>
+                <text x="18" y="24" fill="#555" font-size="9" text-anchor="middle">E</text>
+                <text x="18" y="40" fill="#555" font-size="9" text-anchor="middle">B</text>
+                <text x="18" y="56" fill="#555" font-size="9" text-anchor="middle">G</text>
+                <text x="18" y="72" fill="#555" font-size="9" text-anchor="middle">D</text>
+                <text x="18" y="88" fill="#555" font-size="9" text-anchor="middle">A</text>
+                <text x="18" y="104" fill="#555" font-size="9" text-anchor="middle">E</text>
+                <text x="55" y="8" fill="#444" font-size="8" text-anchor="middle">1</text>
+                <text x="105" y="8" fill="#444" font-size="8" text-anchor="middle">2</text>
+                <text x="155" y="8" fill="#444" font-size="8" text-anchor="middle">3</text>
+                <text x="205" y="8" fill="#444" font-size="8" text-anchor="middle">4</text>
+                <text x="255" y="8" fill="#444" font-size="8" text-anchor="middle">5</text>
+                <text x="305" y="8" fill="#444" font-size="8" text-anchor="middle">6</text>
+                <text x="355" y="8" fill="#444" font-size="8" text-anchor="middle">7</text>
+                <circle cx="255" cy="115" r="3" fill="#444"/>
+                <!-- ROOT: open A string -->
+                <circle cx="18" cy="88" r="10" fill="#3b82f6" opacity="0.9"/>
+                <text x="18" y="92" fill="white" font-size="9" font-weight="bold" text-anchor="middle">R</text>
+                <!-- TARGET: D on A string 5th fret -->
+                <circle cx="255" cy="88" r="10" fill="#f5a623" opacity="0.9"/>
+                <text x="255" y="92" fill="#1a1a1a" font-size="9" font-weight="bold" text-anchor="middle">4</text>
+                <!-- ALT: D on D string open -->
+                <circle cx="18" cy="68" r="10" fill="#f5a623" opacity="0.35" stroke="#f5a623" stroke-width="1.5" stroke-dasharray="3"/>
+                <text x="18" y="72" fill="#f5a623" font-size="8" text-anchor="middle" opacity="0.6">alt</text>
+              </svg>
+              <div style="display:flex; gap:16px; margin-top:12px; font-size:11px; color:#555;">
+                <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6;margin-right:4px;vertical-align:middle"></span>Root (A3)</span>
+                <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f5a623;margin-right:4px;vertical-align:middle"></span>Target (D4 · P4)</span>
+                <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:transparent;border:1px dashed #f5a623;margin-right:4px;vertical-align:middle"></span>Alt position</span>
+              </div>
+            </div>
+
+            <div class="pitch-card">
+              <div class="pitch-header">
+                <div class="pitch-label">Detected pitch</div>
+                <div class="pitch-status">● Listening</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:16px;">
+                <div class="listening-anim">
+                  <div class="listening-bar" style="height:12px"></div>
+                  <div class="listening-bar" style="height:20px"></div>
+                  <div class="listening-bar" style="height:28px"></div>
+                  <div class="listening-bar" style="height:16px"></div>
+                  <div class="listening-bar" style="height:8px"></div>
+                </div>
+                <div style="color:#555; font-size:14px;">Play the P4 above your root note</div>
+              </div>
+            </div>
+
+            <div class="feedback-card">
+              <div class="feedback-icon">✓</div>
+              <div class="feedback-text">
+                <h3>Correct!</h3>
+                <div class="feedback-sub">Detected: D4 (293.7 Hz) · +8 cents — great accuracy</div>
+              </div>
+              <div class="auto-advance">
+                <div class="advance-bar"><div class="advance-fill"></div></div>
+                <div class="advance-timer">next in 2s · <span class="kbd">Space</span> to skip</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================  PROGRESS VIEW  -->
+<div id="progress" class="screen">
+  <div class="app-shell">
+    <div class="sidebar">
+      <div class="app-name">EarTrain CI</div>
+      <div class="sidebar-item"><span class="sidebar-icon">⌂</span> Home</div>
+      <div class="sidebar-item"><span class="sidebar-icon">♪</span> Exercise</div>
+      <div class="sidebar-item active"><span class="sidebar-icon">◎</span> Progress</div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-item"><span class="sidebar-icon">⚙</span> Settings</div>
+    </div>
+    <div class="main">
+      <div class="screen-label">Screen: <strong>ProgressView</strong></div>
+      <div class="progress-screen">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h2 style="font-size:18px; font-weight:700;">Your Progress</h2>
+          <div class="milestone-badge">🎯 2.4h / 12h milestone</div>
+        </div>
+        <div class="heatmap-card">
+          <div><div class="card-title">Confusion Matrix — Accuracy by Interval × Register</div><div style="font-size:12px; color:#555; margin-top:4px;">Color + percentage. Click a cell to drill that combination.</div></div>
+          <table class="heatmap-table">
+            <thead><tr><th></th><th>Low<br><span style="font-weight:400;color:#444;font-size:10px">E2–B3</span></th><th>Mid<br><span style="font-weight:400;color:#444;font-size:10px">C4–B4</span></th><th>High<br><span style="font-weight:400;color:#444;font-size:10px">C5+</span></th></tr></thead>
+            <tbody>
+              <tr><td style="font-size:12px;color:#888;text-align:left;padding-right:16px;">m3</td><td class="heatmap-cell hm-bad">38%</td><td class="heatmap-cell hm-bad">41%</td><td class="heatmap-cell hm-ok">55%</td></tr>
+              <tr><td style="font-size:12px;color:#888;text-align:left;padding-right:16px;">M3</td><td class="heatmap-cell hm-bad">44%</td><td class="heatmap-cell hm-ok">56%</td><td class="heatmap-cell hm-ok">60%</td></tr>
+              <tr><td style="font-size:12px;color:#888;text-align:left;padding-right:16px;">P5</td><td class="heatmap-cell hm-ok">58%</td><td class="heatmap-cell hm-ok">64%</td><td class="heatmap-cell hm-bad">42%</td></tr>
+              <tr><td style="font-size:12px;color:#888;text-align:left;padding-right:16px;">P4</td><td class="heatmap-cell hm-ok">65%</td><td class="heatmap-cell hm-good">75%</td><td class="heatmap-cell hm-ok">60%</td></tr>
+              <tr><td style="font-size:12px;color:#888;text-align:left;padding-right:16px;">M2</td><td class="heatmap-cell hm-ok">70%</td><td class="heatmap-cell hm-good">78%</td><td class="heatmap-cell hm-good">82%</td></tr>
+              <tr><td style="font-size:12px;color:#888;text-align:left;padding-right:16px;">P8</td><td class="heatmap-cell hm-good">85%</td><td class="heatmap-cell hm-good">89%</td><td class="heatmap-cell hm-good">87%</td></tr>
+              <tr><td style="font-size:12px;color:#888;text-align:left;padding-right:16px;">m7</td><td class="heatmap-cell hm-empty">—</td><td class="heatmap-cell hm-empty">—</td><td class="heatmap-cell hm-empty">—</td></tr>
+              <tr><td style="font-size:12px;color:#888;text-align:left;padding-right:16px;">M6</td><td class="heatmap-cell hm-empty">—</td><td class="heatmap-cell hm-empty">—</td><td class="heatmap-cell hm-empty">—</td></tr>
+            </tbody>
+          </table>
+          <div class="heatmap-legend"><div class="legend-item"><div class="legend-dot" style="background:rgba(239,68,68,0.3)"></div>&lt;50%</div><div class="legend-item"><div class="legend-dot" style="background:rgba(245,166,35,0.25)"></div>50–74%</div><div class="legend-item"><div class="legend-dot" style="background:rgba(74,222,128,0.25)"></div>≥75%</div><div class="legend-item"><div class="legend-dot" style="background:#2a2a2a"></div>&lt;5 trials</div></div>
+        </div>
+        <div class="progress-grid">
+          <div class="trend-card"><div class="card-title">Accuracy Trend</div><div style="font-size:12px;color:#555;margin-bottom:8px;">Sessions over time</div><div class="chart-placeholder"><div class="chart-bar" style="height:45%;background:#ef444455;"></div><div class="chart-bar" style="height:52%;background:#f5a62355;"></div><div class="chart-bar" style="height:48%;background:#f5a62355;"></div><div class="chart-bar" style="height:58%;background:#f5a62355;"></div><div class="chart-bar" style="height:55%;background:#f5a62355;"></div><div class="chart-bar" style="height:63%;background:#f5a62355;"></div><div class="chart-bar" style="height:67%;background:#f5a62388;"></div></div><div style="font-size:12px;color:#4ade80;margin-top:8px;">↑ +22pp since first session</div></div>
+          <div class="session-summary card"><div class="card-title">Last Session</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;"><div><div style="font-size:11px;color:#555;">Duration</div><div style="font-size:13px;margin-top:4px;">10 min (of 10 min goal)</div></div><div><div style="font-size:11px;color:#555;">Attempts</div><div style="font-size:13px;margin-top:4px;">28</div></div><div><div style="font-size:11px;color:#555;">Accuracy</div><div style="font-size:13px;color:#f5a623;font-weight:700;margin-top:4px;">67%</div></div><div><div style="font-size:11px;color:#555;">Drill focus</div><div style="font-size:13px;margin-top:4px;">m3 Low, M3 Low</div></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================  SETTINGS VIEW  -->
+<div id="settings" class="screen">
+  <div class="app-shell">
+    <div class="sidebar">
+      <div class="app-name">EarTrain CI</div>
+      <div class="sidebar-item"><span class="sidebar-icon">⌂</span> Home</div>
+      <div class="sidebar-item"><span class="sidebar-icon">♪</span> Exercise</div>
+      <div class="sidebar-item"><span class="sidebar-icon">◎</span> Progress</div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-item active"><span class="sidebar-icon">⚙</span> Settings</div>
+    </div>
+    <div class="main">
+      <div class="screen-label">Screen: <strong>SettingsView</strong></div>
+      <div class="settings-screen">
+        <h2>Settings</h2>
+        <div class="settings-section">
+          <div class="settings-section-title">Audio Input</div>
+          <div class="setting-row"><div><div class="setting-label">Input Device</div><div class="setting-sub">Microphone or audio interface</div></div><div class="setting-control"><div class="select-mock">MacBook Pro Mic ↓</div></div></div>
+          <div class="setting-row"><div><div class="setting-label">CI Bluetooth Keep-Alive</div><div class="setting-sub">Silent output keeps streaming active — prevents start-up delay</div></div><div class="setting-control"><div class="toggle-on"></div></div></div>
+          <div class="setting-row"><div><div class="setting-label">Audio Buffer Size</div><div class="setting-sub">Smaller = lower latency, higher CPU (Advanced)</div></div><div class="setting-control"><div class="select-mock">256 samples ↓</div></div></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Session Defaults</div>
+          <div class="setting-row"><div><div class="setting-label">Default Session Duration</div><div class="setting-sub">Pre-selects this in the session start sheet</div></div><div class="setting-control"><div class="select-mock">10 minutes ↓</div></div></div>
+          <div class="setting-row"><div><div class="setting-label">Root Note</div><div class="setting-sub">Fixed for the session</div></div><div class="setting-control"><div class="select-mock">A (A3 · 220 Hz) ↓</div></div></div>
+          <div class="setting-row"><div><div class="setting-label">Register Range</div></div><div class="setting-control"><div class="select-mock">All registers ↓</div></div></div>
+          <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:12px;"><div><div class="setting-label">Active Interval Set</div></div><div class="interval-checklist"><div class="interval-chip on">M2</div><div class="interval-chip on">m3</div><div class="interval-chip on">M3</div><div class="interval-chip on">P4</div><div class="interval-chip on">P5</div><div class="interval-chip on">M6</div><div class="interval-chip on">m7</div><div class="interval-chip on">P8</div></div></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Feedback &amp; Display</div>
+          <div class="setting-row"><div><div class="setting-label">Show Fretboard Position Hints</div></div><div class="setting-control"><div class="toggle-on"></div></div></div>
+          <div class="setting-row"><div><div class="setting-label">Hint Detail Level</div></div><div class="setting-control"><div class="select-mock">Primary + alts ↓</div></div></div>
+          <div class="setting-row"><div><div class="setting-label">Correct feedback delay</div><div class="setting-sub">Auto-advances after this long</div></div><div class="setting-control"><div class="select-mock">2 seconds ↓</div></div></div>
+          <div class="setting-row"><div><div class="setting-label">Wrong feedback delay</div><div class="setting-sub">More time to absorb the fretboard + result</div></div><div class="setting-control"><div class="select-mock">4 seconds ↓</div></div></div>
+          <div class="setting-row"><div><div class="setting-label">Pitch Tolerance</div></div><div class="setting-control"><div class="select-mock">±25 cents ↓</div></div></div>
+        </div>
+        <div class="danger-zone"><div class="danger-title">Reset &amp; Recalibrate</div><div style="font-size:13px;color:#888;margin-bottom:12px;">Re-runs Phase 0. Session data preserved.</div><button class="btn-danger">Re-run Calibration Assessment</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================  PHASE 0 ONBOARDING  -->
+<div id="onboarding" class="screen">
+  <div class="app-shell">
+    <div class="sidebar" style="opacity:0.4;pointer-events:none;">
+      <div class="app-name">EarTrain CI</div>
+      <div class="sidebar-item"><span class="sidebar-icon">⌂</span> Home</div>
+      <div class="sidebar-item"><span class="sidebar-icon">♪</span> Exercise</div>
+      <div class="sidebar-item"><span class="sidebar-icon">◎</span> Progress</div>
+    </div>
+    <div class="main">
+      <div class="screen-label">Screen: <strong>Phase 0 Onboarding Assessment</strong> <span class="badge">First launch · listening only · ~5-8 min</span></div>
+      <div class="onboarding-screen">
+        <div class="onboarding-center">
+          <div class="onboarding-step">Question 7 of 48 · ~6 min remaining</div>
+          <div class="onboarding-progress"><div class="prog-dot done"></div><div class="prog-dot done"></div><div class="prog-dot done"></div><div class="prog-dot done"></div><div class="prog-dot done"></div><div class="prog-dot done"></div><div class="prog-dot current"></div><div class="prog-dot"></div><div class="prog-dot"></div><div class="prog-dot"></div></div>
+          <div style="background:#232323;border:1px solid #2d2d2d;border-radius:12px;padding:24px 28px;margin-bottom:28px;">
+            <div style="font-size:13px;color:#888;margin-bottom:16px;text-align:left;display:flex;align-items:center;gap:8px;"><span style="background:#2d2d2d;border-radius:4px;padding:4px 8px;font-size:11px;">Mid register · C4–B4</span><span>Listen, then choose which interval you heard:</span></div>
+            <div style="text-align:center;margin-bottom:20px;"><button style="background:#f5a623;color:#1a1a1a;border:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">▶ Play interval again</button><div style="font-size:11px;color:#555;margin-top:8px;">Listen as many times as you need</div></div>
+          </div>
+          <div class="interval-pair">
+            <div class="interval-option"><div class="play-small">▷</div><div class="name">P5</div><div class="semitones">Perfect fifth · 7 semitones</div></div>
+            <div class="interval-option"><div class="play-small">▷</div><div class="name">P8</div><div class="semitones">Octave · 12 semitones</div></div>
+          </div>
+          <div class="onboarding-hint">No guitar needed · listening only</div>
+          <div style="margin-top:24px;"><button style="background:transparent;border:none;color:#555;font-size:12px;cursor:pointer;text-decoration:underline;">Skip → start practicing without calibration</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================  END OF SESSION  -->
+<div id="end-session" class="screen">
+  <div class="app-shell">
+    <div class="sidebar">
+      <div class="app-name">EarTrain CI</div>
+      <div class="sidebar-item"><span class="sidebar-icon">⌂</span> Home</div>
+      <div class="sidebar-item active"><span class="sidebar-icon">♪</span> Exercise</div>
+      <div class="sidebar-item"><span class="sidebar-icon">◎</span> Progress</div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-item"><span class="sidebar-icon">⚙</span> Settings</div>
+    </div>
+    <div class="main">
+      <div class="screen-label">Screen: <strong>End of Session</strong> <span class="badge">Shown when time expires or user ends session</span></div>
+      <div class="end-screen">
+        <div class="end-center">
+          <div class="end-icon">🎸</div>
+          <div class="end-h1">Session complete</div>
+          <div class="end-sub">10 minutes · 28 attempts · April 25</div>
+          <div class="end-stats">
+            <div class="end-stat"><div class="end-stat-val warn">67%</div><div class="end-stat-lbl">Accuracy</div></div>
+            <div class="end-stat"><div class="end-stat-val good">+9pp</div><div class="end-stat-lbl">vs last session</div></div>
+            <div class="end-stat"><div class="end-stat-val">2.4h</div><div class="end-stat-lbl">Total practice</div></div>
+          </div>
+          <div class="end-insight">
+            <div class="end-insight-title">What this session revealed</div>
+            <div class="end-insight-text">Your <strong>m3 in the low register</strong> is still your hardest bucket (38% accuracy, 12 trials). Your <strong>P8</strong> has improved to 85% — octaves are reliable now. Next session will focus on <strong>m3 Low</strong> and <strong>M3 Low</strong>.</div>
+          </div>
+          <div class="end-actions">
+            <button class="btn-outline" onclick="show('progress', document.querySelectorAll('.tab')[3])">View Progress</button>
+            <button class="btn-primary" onclick="show('session-start', document.querySelectorAll('.tab')[1])">Start Another Session ▶</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function show(id, tabEl) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (tabEl) tabEl.classList.add('active');
+}
+</script>
+</body>
+</html>
