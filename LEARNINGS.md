@@ -88,8 +88,8 @@ which prevents CI Bluetooth stream suspension. The `IntervalPlayer`'s `AVAudioSo
 outputs silent frames when not playing an interval, maintaining the audio session
 continuously. This replicates the "silent YouTube video" workaround without user action.
 
-**Status:** Implemented (step 5). Real-world validation on a CI Bluetooth device still
-needed to confirm the OS doesn't suspend the session during long silences.
+**Status:** Validated on real CI Bluetooth device (2026-04-25). Stream stays active
+during long silences with engine running. No "silent YouTube video" workaround needed.
 
 ---
 
