@@ -420,20 +420,26 @@ Fretboard SVG scales proportionally.
 
 **Platform targets:** macOS 13 (Ventura) minimum. Swift 5.9+. AudioKit 5.x via Swift Package Manager.
 
+**Implementation note (updated during build):** `SoundpipeAudioKit` (which provides `PitchTap`)
+has a C/C++ interop incompatibility with Swift 6.3's stricter Clang. Pitch detection is
+implemented using normalized autocorrelation with parabolic interpolation via Accelerate/vDSP
+(`PitchDetector.swift`). This is actually a better fit for guitar because autocorrelation finds
+the fundamental period regardless of harmonic strength, whereas FFT peak-picking can lock onto
+overtones on low strings. AudioKit is retained for `SineOscillator` playback (step 4+).
+
 ```
 EarTrain (macOS SwiftUI app)
-├── Audio Engine (AudioKit — single AVAudioEngine instance)
-│   ├── AmplitudeTracker — RMS amplitude gate for onset detection
-│   ├── PitchTap — continuous pitch polling (fundamental frequency, ~93ms/frame)
-│   ├── SineOscillator — interval/melody playback (pure tones, better for CI)
-│   └── Silence mixer node — 0-amplitude Mixer in AudioKit graph for CI Bluetooth keep-alive
-│       (NOT a separate AVAudioEngine — AudioKit owns the engine; silence node lives in its graph)
+├── Audio Engine
+│   ├── AVAudioEngine (direct) — mic input capture + installTap for pitch detection
+│   ├── PitchDetector (Accelerate/vDSP) — normalized autocorrelation, ~93ms/frame at 4096 samples
+│   ├── AudioKit SineOscillator — interval/melody playback (pure tones, better for CI)
+│   └── AVAudioEngine output node — 0-amplitude buffer for CI Bluetooth keep-alive
 ├── Note Detection Pipeline (gate approach)
-│   ├── Onset: AmplitudeTracker crosses threshold (-40dBFS → -20dBFS) → start collecting PitchTap readings
-│   ├── Stability: N=3 consecutive PitchTap readings within 25 cents → lock pitch, grade note
+│   ├── Onset: RMS amplitude gate (vDSP_rmsqv) → start collecting PitchDetector readings
+│   ├── Stability: N=3 consecutive readings within 25 cents → lock pitch, grade note
 │   ├── Reset: amplitude drops below onset threshold → reset gate, ready for next note
-│   ├── Confidence: PitchTap confidence < 0.9 → discard frame (don't count toward N=3)
-│   └── No-read: if confidence < 0.9 for 10+ consecutive frames → show "couldn't detect pitch, try again"
+│   ├── Confidence: autocorrelation peak < 0.5 → discard frame (don't count toward N=3)
+│   └── No-read: if confidence < threshold for 10+ consecutive frames → show "couldn't detect pitch, try again"
 ├── Exercise Engine
 │   ├── IntervalExercise — generates root + target interval, evaluates response
 │   │   ├── Result enum (priority order — check in this sequence):
@@ -470,11 +476,11 @@ EarTrain (macOS SwiftUI app)
 
 ## Open Questions
 
-1. **Pitch detection accuracy on low guitar strings**: Guitar has complex harmonics. `PitchTap`
-   can be confused by strong overtones on low strings (E2, A2). Mitigation: set a minimum
-   confidence threshold (e.g., 0.9) and require pitch stability across N consecutive frames
-   before confirming a note. If this proves unreliable, `aubio` (via a Swift bridge or a
-   lightweight Python sidecar) is a fallback with better guitar-optimized fundamental extraction.
+1. **Pitch detection accuracy on low guitar strings**: Resolved in implementation — normalized
+   autocorrelation (`PitchDetector.swift`) finds the fundamental period directly and is not
+   confused by strong overtones on low strings (E2, A2). Parabolic interpolation gives sub-sample
+   period accuracy. Confidence threshold (0.5 default) discards frames with weak signal. Requires
+   real-world validation on the actual guitar/mic setup.
 2. **Bent notes**: Pitch bending produces a continuous glide. For Phase 1 (interval training),
    bending isn't required — the user plays discrete notes. For Phase 3+ (blues licks), the app
    will need to detect the peak pitch of a bend or track the pitch contour. Deferred to Phase 3.

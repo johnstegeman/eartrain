@@ -9,7 +9,7 @@ public struct ContentView: View {
     public var body: some View {
         Group {
             if mic.isAuthorized {
-                HomeView()
+                PitchMonitorView()
             } else if mic.isBlocked {
                 MicBlockedView(openSettings: mic.openSystemSettings)
             } else {
@@ -20,21 +20,6 @@ public struct ContentView: View {
         .background(EarTrainColors.bg)
         .task {
             await mic.requestIfNeeded()
-        }
-    }
-}
-
-// MARK: - Placeholder home view (replaced in Phase 1)
-
-private struct HomeView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("EarTrain CI")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(EarTrainColors.textPrimary)
-            Text("Microphone access granted — ready to build.")
-                .font(.system(size: 14))
-                .foregroundColor(EarTrainColors.textSecondary)
         }
     }
 }
