@@ -60,30 +60,29 @@ private struct TimbreRow: View {
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 14) {
-                Image(systemName: timbre.systemImage)
-                    .font(.system(size: 18))
-                    .frame(width: 24)
-                    .foregroundColor(isSelected ? .black : EarTrainColors.textPrimary)
+        HStack(spacing: 14) {
+            Image(systemName: timbre.systemImage)
+                .font(.system(size: 18))
+                .frame(width: 24)
+                .foregroundColor(isSelected ? .black : EarTrainColors.textPrimary)
 
-                Text(timbre.label)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(isSelected ? .black : EarTrainColors.textPrimary)
+            Text(timbre.label)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(isSelected ? .black : EarTrainColors.textPrimary)
 
-                Spacer()
+            Spacer()
 
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.black)
-                }
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.black)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(isSelected ? EarTrainColors.accent : EarTrainColors.surface)
-            .cornerRadius(8)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(isSelected ? EarTrainColors.accent : EarTrainColors.surface)
+        .cornerRadius(8)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
     }
 }
