@@ -72,6 +72,7 @@ public final class ExerciseViewModel: ObservableObject {
         logger?.endSession()
         logger = nil
         audio.disableMicTap()
+        phase = .idle
     }
 
     // MARK: - Control

@@ -9,16 +9,26 @@ import SwiftUI
 public struct ContourView: View {
     @ObservedObject var vm: ContourViewModel
 
+    @State private var selectedDuration: SessionDuration = .open
+
     public init(vm: ContourViewModel) { self.vm = vm }
 
     public var body: some View {
-        VStack(spacing: 32) {
-            scorePanel
-            statusPanel
-            answerButtons
+        Group {
+            if vm.phase == .idle {
+                ExerciseReadyView(mode: .contour, selectedDuration: $selectedDuration) {
+                    vm.beginSession()
+                    vm.startExercise()
+                }
+            } else {
+                VStack(spacing: 32) {
+                    scorePanel
+                    statusPanel
+                    answerButtons
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear  { vm.beginSession(); vm.startExercise() }
         .onDisappear { vm.cancel() }
     }
 

@@ -71,6 +71,7 @@ public final class IdentificationViewModel: ObservableObject {
         currentTask = nil
         logger?.endSession()
         logger = nil
+        phase = .idle
     }
 
     // MARK: - Control

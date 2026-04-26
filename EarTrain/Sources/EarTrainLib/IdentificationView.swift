@@ -7,17 +7,27 @@ import SwiftUI
 public struct IdentificationView: View {
     @ObservedObject var vm: IdentificationViewModel
 
+    @State private var selectedDuration: SessionDuration = .open
+
     public init(vm: IdentificationViewModel) { self.vm = vm }
 
     public var body: some View {
-        VStack(spacing: 28) {
-            scorePanel
-            teachPanel
-            statusPanel
-            answerButtons
+        Group {
+            if vm.phase == .idle {
+                ExerciseReadyView(mode: .identification, selectedDuration: $selectedDuration) {
+                    vm.beginSession()
+                    vm.startSession()
+                }
+            } else {
+                VStack(spacing: 28) {
+                    scorePanel
+                    teachPanel
+                    statusPanel
+                    answerButtons
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear  { vm.beginSession(); vm.startSession() }
         .onDisappear { vm.cancel() }
     }
 

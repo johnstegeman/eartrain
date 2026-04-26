@@ -25,7 +25,7 @@ final class AppSession: ObservableObject {
 public struct ContentView: View {
     @StateObject private var session = AppSession()
     @StateObject private var mic = MicrophonePermissionManager()
-    @State private var mode: AppMode = .intervals
+    @State private var mode: AppMode = .home
 
     public init() {}
 
@@ -79,6 +79,7 @@ public struct ContentView: View {
     @ViewBuilder
     private var modeContent: some View {
         switch mode {
+        case .home:           HomeView(store: session.progressStore, activeMode: $mode)
         case .intervals:      ExerciseView(vm: session.exerciseVM)
         case .contour:        ContourView(vm: session.contourVM)
         case .identification: IdentificationView(vm: session.identVM)
@@ -91,6 +92,7 @@ public struct ContentView: View {
 // MARK: - App mode
 
 public enum AppMode: CaseIterable {
+    case home
     case intervals
     case contour
     case identification
@@ -99,11 +101,36 @@ public enum AppMode: CaseIterable {
 
     public var label: String {
         switch self {
+        case .home:           return "Home"
         case .intervals:      return "Intervals"
         case .contour:        return "Contour"
         case .identification: return "Identify"
         case .progress:       return "Progress"
         case .settings:       return "Settings"
+        }
+    }
+
+    /// SF Symbol for use in the session start sheet and HomeView mode cards.
+    public var icon: String {
+        switch self {
+        case .home:           return "house.fill"
+        case .intervals:      return "guitars.fill"
+        case .contour:        return "arrow.up.arrow.down"
+        case .identification: return "ear.fill"
+        case .progress:       return "chart.bar.fill"
+        case .settings:       return "gearshape.fill"
+        }
+    }
+
+    /// One-line description shown on mode cards and in the start sheet.
+    public var exerciseDescription: String {
+        switch self {
+        case .home:           return ""
+        case .intervals:      return "Play back intervals on your guitar — mic grades your response"
+        case .contour:        return "Higher, lower, or same? The simplest pitch discrimination exercise"
+        case .identification: return "Hear an interval and identify it by ear only"
+        case .progress:       return ""
+        case .settings:       return ""
         }
     }
 }

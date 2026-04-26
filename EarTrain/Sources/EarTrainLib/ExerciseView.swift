@@ -5,18 +5,25 @@ import SwiftUI
 public struct ExerciseView: View {
     @ObservedObject var vm: ExerciseViewModel
 
+    @State private var selectedDuration: SessionDuration = .open
+
     public init(vm: ExerciseViewModel) { self.vm = vm }
 
     public var body: some View {
-        VStack(spacing: 32) {
-            intervalDisplay
-            statusPanel
-            controls
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            vm.beginSession()
-            vm.startExercise()
+        Group {
+            if vm.phase == .idle {
+                ExerciseReadyView(mode: .intervals, selectedDuration: $selectedDuration) {
+                    vm.beginSession()
+                    vm.startExercise()
+                }
+            } else {
+                VStack(spacing: 32) {
+                    intervalDisplay
+                    statusPanel
+                    controls
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .onDisappear { vm.cancel() }
     }

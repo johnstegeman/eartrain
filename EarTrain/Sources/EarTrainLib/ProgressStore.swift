@@ -68,6 +68,17 @@ public final class ProgressStore: ObservableObject {
         stats.contour.values.contains { $0.values.contains { $0.total > 0 } }
     }
 
+    /// True if any (interval, register) bucket has ≥ 5 trials and an error rate > 30%.
+    /// Used to enable the "Drill My Misses" shortcut.
+    public var hasDrillableData: Bool {
+        for byRegister in stats.matrix.values {
+            for counts in byRegister.values {
+                if counts.total >= 5 && counts.errorRate > 0.30 { return true }
+            }
+        }
+        return false
+    }
+
     /// Overall accuracy across all interval trials (playback + identification).
     public var overallAccuracy: Double? {
         var totalCorrect = 0
