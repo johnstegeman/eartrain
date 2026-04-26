@@ -30,6 +30,8 @@ public final class ExerciseViewModel: ObservableObject {
     @Published public var phase: Phase = .idle
     @Published public var currentInterval: Interval = .m3
     @Published public var rootHz: Float = 440.0   // A4 default; used for playback only
+    @Published public var totalTrials: Int = 0
+    @Published public var correctTrials: Int = 0
 
     // MARK: - Settings
 
@@ -45,6 +47,12 @@ public final class ExerciseViewModel: ObservableObject {
     private var listenTask: Task<Void, Never>?
     private var playTask:   Task<Void, Never>?
     private var logger: SessionLogger?
+    private var sessionStartDate: Date? = nil
+
+    /// Elapsed time since `beginSession()` was called. Snapshot this before calling `cancel()`.
+    public var sessionDuration: TimeInterval {
+        sessionStartDate.map { Date().timeIntervalSince($0) } ?? 0
+    }
 
     private let stabilityCount  = 3
     private let stabilityCents: Float = 25
@@ -56,10 +64,12 @@ public final class ExerciseViewModel: ObservableObject {
     }
 
     /// Start a new logging session and enable the mic tap.
-    /// Call from ExerciseView.onAppear.
     public func beginSession() {
         logger = SessionLogger(mode: "intervals")
         audio.enableMicTap()
+        sessionStartDate = Date()
+        totalTrials  = 0
+        correctTrials = 0
     }
 
     /// Cancel in-flight tasks, end the logging session, and release the mic tap.
@@ -120,7 +130,9 @@ public final class ExerciseViewModel: ObservableObject {
             guard let detectedRoot = await self.waitForStableNote() else {
                 guard !Task.isCancelled else { return }
                 self.logger?.logNoRead(interval: interval, rootHz: self.rootHz)
-                self.phase = .noRead; return
+                self.phase = .noRead
+                self.totalTrials += 1
+                return
             }
             guard !Task.isCancelled else { return }
 
@@ -133,7 +145,9 @@ public final class ExerciseViewModel: ObservableObject {
             guard let detectedInterval = await self.waitForStableNote() else {
                 guard !Task.isCancelled else { return }
                 self.logger?.logNoRead(interval: interval, rootHz: detectedRoot)
-                self.phase = .noRead; return
+                self.phase = .noRead
+                self.totalTrials += 1
+                return
             }
             guard !Task.isCancelled else { return }
 
@@ -148,6 +162,8 @@ public final class ExerciseViewModel: ObservableObject {
                                    detectedHz: detectedInterval,
                                    result: result)
             self.phase = .result(result)
+            self.totalTrials += 1
+            if case .correct = result { self.correctTrials += 1 }
 
             let delay: TimeInterval
             switch result {

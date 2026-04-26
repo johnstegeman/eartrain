@@ -53,6 +53,12 @@ public final class IdentificationViewModel: ObservableObject {
     private var correctStreak = 0
     private var currentTask: Task<Void, Never>?
     private var logger: SessionLogger?
+    private var sessionStartDate: Date? = nil
+
+    /// Elapsed time since `beginSession()` was called. Snapshot this before calling `cancel()`.
+    public var sessionDuration: TimeInterval {
+        sessionStartDate.map { Date().timeIntervalSince($0) } ?? 0
+    }
 
     public init(audio: any AudioPlaying) {
         self.audio = audio
@@ -62,6 +68,9 @@ public final class IdentificationViewModel: ObservableObject {
     public func beginSession() {
         logger?.endSession()
         logger = SessionLogger(mode: "identification")
+        sessionStartDate = Date()
+        totalTrials  = 0
+        correctTrials = 0
     }
 
     /// Cancel any in-flight task. Ends the current logging session.

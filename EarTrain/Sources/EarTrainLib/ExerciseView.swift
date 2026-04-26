@@ -4,28 +4,70 @@ import SwiftUI
 /// Wired to ExerciseViewModel for state; AudioEngineManager is owned by the parent.
 public struct ExerciseView: View {
     @ObservedObject var vm: ExerciseViewModel
+    @ObservedObject var store: ProgressStore
+    @ObservedObject var audio: AudioEngineManager
+    @Binding var activeMode: AppMode
 
-    @State private var selectedDuration: SessionDuration = .open
+    @Binding var selectedDuration: SessionDuration
+    @State private var sessionSummary: SessionEndSummary? = nil
 
-    public init(vm: ExerciseViewModel) { self.vm = vm }
+    public init(vm: ExerciseViewModel, store: ProgressStore, audio: AudioEngineManager,
+                activeMode: Binding<AppMode>, selectedDuration: Binding<SessionDuration>) {
+        self.vm = vm
+        self.store = store
+        self.audio = audio
+        self._activeMode = activeMode
+        self._selectedDuration = selectedDuration
+    }
 
     public var body: some View {
         Group {
             if vm.phase == .idle {
-                ExerciseReadyView(mode: .intervals, selectedDuration: $selectedDuration) {
+                ExerciseReadyView(mode: .intervals, selectedDuration: $selectedDuration,
+                                  volume: $audio.outputVolume) {
                     vm.beginSession()
                     vm.startExercise()
                 }
             } else {
-                VStack(spacing: 32) {
-                    intervalDisplay
-                    statusPanel
-                    controls
+                VStack(spacing: 0) {
+                    endSessionBar
+                    VStack(spacing: 32) {
+                        intervalDisplay
+                        statusPanel
+                        controls
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .onDisappear { vm.cancel() }
+        .sheet(item: $sessionSummary) { summary in
+            EndOfSessionView(summary: summary, store: store, activeMode: $activeMode)
+        }
+    }
+
+    private var endSessionBar: some View {
+        HStack {
+            VolumeSlider(volume: $audio.outputVolume)
+            Spacer()
+            Button("End Session") { endSession() }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(EarTrainColors.textDisabled)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+    }
+
+    private func endSession() {
+        let summary = SessionEndSummary(
+            mode: .intervals,
+            totalTrials: vm.totalTrials,
+            correctTrials: vm.correctTrials,
+            duration: vm.sessionDuration
+        )
+        vm.cancel()
+        sessionSummary = summary
     }
 
     // MARK: - Interval display

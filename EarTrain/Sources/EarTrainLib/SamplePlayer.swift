@@ -1,3 +1,4 @@
+import Accelerate
 import AVFoundation
 
 /// Plays pre-rendered guitar WAV samples for interval training.
@@ -16,6 +17,11 @@ public final class SamplePlayer {
 
     public static let midiLow  = 40
     public static let midiHigh = 81
+
+    /// Linear gain applied to every loaded sample buffer.
+    /// Compensates for conservative recording levels so guitar samples
+    /// match the sine wave in perceived loudness. 3.0 ≈ +9.5 dB.
+    private static let sampleGain: Float = 3.0
 
     // MARK: - Private state
 
@@ -91,6 +97,14 @@ public final class SamplePlayer {
                 let count = Int(buffer.frameLength)
                 memcpy(dst[0], src[0], count * MemoryLayout<Float>.size)
                 memcpy(dst[1], src[0], count * MemoryLayout<Float>.size)
+                // Boost gain and clamp to [-1, 1] to avoid clipping artifacts.
+                var gain = Self.sampleGain
+                var lo: Float = -1, hi: Float = 1
+                let n = vDSP_Length(count)
+                vDSP_vsmul(dst[0], 1, &gain, dst[0], 1, n)
+                vDSP_vclip(dst[0], 1, &lo, &hi, dst[0], 1, n)
+                vDSP_vsmul(dst[1], 1, &gain, dst[1], 1, n)
+                vDSP_vclip(dst[1], 1, &lo, &hi, dst[1], 1, n)
                 loaded[midi] = stereo
             } else {
                 loaded[midi] = buffer

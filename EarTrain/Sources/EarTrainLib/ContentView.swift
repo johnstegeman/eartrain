@@ -26,6 +26,7 @@ public struct ContentView: View {
     @StateObject private var session = AppSession()
     @StateObject private var mic = MicrophonePermissionManager()
     @State private var mode: AppMode = .home
+    @State private var sessionDuration: SessionDuration = .open
 
     public init() {}
 
@@ -79,10 +80,10 @@ public struct ContentView: View {
     @ViewBuilder
     private var modeContent: some View {
         switch mode {
-        case .home:           HomeView(store: session.progressStore, activeMode: $mode)
-        case .intervals:      ExerciseView(vm: session.exerciseVM)
-        case .contour:        ContourView(vm: session.contourVM)
-        case .identification: IdentificationView(vm: session.identVM)
+        case .home:           HomeView(store: session.progressStore, activeMode: $mode, selectedDuration: $sessionDuration)
+        case .intervals:      ExerciseView(vm: session.exerciseVM, store: session.progressStore, audio: session.audio, activeMode: $mode, selectedDuration: $sessionDuration)
+        case .contour:        ContourView(vm: session.contourVM, store: session.progressStore, audio: session.audio, activeMode: $mode, selectedDuration: $sessionDuration)
+        case .identification: IdentificationView(vm: session.identVM, store: session.progressStore, audio: session.audio, activeMode: $mode, selectedDuration: $sessionDuration)
         case .progress:       ProgressView(store: session.progressStore)
         case .settings:       SettingsView(audio: session.audio)
         }

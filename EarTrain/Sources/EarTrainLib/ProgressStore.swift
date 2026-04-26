@@ -68,6 +68,21 @@ public final class ProgressStore: ObservableObject {
         stats.contour.values.contains { $0.values.contains { $0.total > 0 } }
     }
 
+    /// Top N interval × register buckets ranked by error rate, requiring ≥ 5 trials each.
+    /// Used on the End of Session screen to surface the biggest weak spots.
+    public func topConfusionBuckets(limit: Int = 2)
+        -> [(intervalName: String, registerName: String, errorRate: Double)]
+    {
+        var buckets: [(intervalName: String, registerName: String, errorRate: Double)] = []
+        for (intervalName, byRegister) in stats.matrix {
+            for (registerName, counts) in byRegister {
+                guard counts.total >= 5, counts.errorRate > 0 else { continue }
+                buckets.append((intervalName, registerName, counts.errorRate))
+            }
+        }
+        return Array(buckets.sorted { $0.errorRate > $1.errorRate }.prefix(limit))
+    }
+
     /// True if any (interval, register) bucket has ≥ 5 trials and an error rate > 30%.
     /// Used to enable the "Drill My Misses" shortcut.
     public var hasDrillableData: Bool {

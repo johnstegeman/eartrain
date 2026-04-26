@@ -6,29 +6,71 @@ import SwiftUI
 /// labelling it, then immediately quizzes with an unlabelled pair.
 public struct IdentificationView: View {
     @ObservedObject var vm: IdentificationViewModel
+    @ObservedObject var store: ProgressStore
+    @ObservedObject var audio: AudioEngineManager
+    @Binding var activeMode: AppMode
 
-    @State private var selectedDuration: SessionDuration = .open
+    @Binding var selectedDuration: SessionDuration
+    @State private var sessionSummary: SessionEndSummary? = nil
 
-    public init(vm: IdentificationViewModel) { self.vm = vm }
+    public init(vm: IdentificationViewModel, store: ProgressStore, audio: AudioEngineManager,
+                activeMode: Binding<AppMode>, selectedDuration: Binding<SessionDuration>) {
+        self.vm = vm
+        self.store = store
+        self.audio = audio
+        self._activeMode = activeMode
+        self._selectedDuration = selectedDuration
+    }
 
     public var body: some View {
         Group {
             if vm.phase == .idle {
-                ExerciseReadyView(mode: .identification, selectedDuration: $selectedDuration) {
+                ExerciseReadyView(mode: .identification, selectedDuration: $selectedDuration,
+                                  volume: $audio.outputVolume) {
                     vm.beginSession()
                     vm.startSession()
                 }
             } else {
-                VStack(spacing: 28) {
-                    scorePanel
-                    teachPanel
-                    statusPanel
-                    answerButtons
+                VStack(spacing: 0) {
+                    endSessionBar
+                    VStack(spacing: 28) {
+                        scorePanel
+                        teachPanel
+                        statusPanel
+                        answerButtons
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .onDisappear { vm.cancel() }
+        .sheet(item: $sessionSummary) { summary in
+            EndOfSessionView(summary: summary, store: store, activeMode: $activeMode)
+        }
+    }
+
+    private var endSessionBar: some View {
+        HStack {
+            VolumeSlider(volume: $audio.outputVolume)
+            Spacer()
+            Button("End Session") { endSession() }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(EarTrainColors.textDisabled)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+    }
+
+    private func endSession() {
+        let summary = SessionEndSummary(
+            mode: .identification,
+            totalTrials: vm.totalTrials,
+            correctTrials: vm.correctTrials,
+            duration: vm.sessionDuration
+        )
+        vm.cancel()
+        sessionSummary = summary
     }
 
     // MARK: - Score

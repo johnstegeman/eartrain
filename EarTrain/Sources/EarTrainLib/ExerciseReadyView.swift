@@ -3,7 +3,7 @@ import SwiftUI
 /// Duration intent for a practice session.
 /// Shown on the pre-exercise ready screen and in the Session Start Sheet on HomeView.
 /// The value is informational for now — no automatic timer yet (that's Phase 1.5).
-enum SessionDuration: CaseIterable {
+public enum SessionDuration: CaseIterable {
     case five, ten, twenty, thirty, open
 
     var label: String {
@@ -34,6 +34,7 @@ enum SessionDuration: CaseIterable {
 struct ExerciseReadyView: View {
     let mode: AppMode
     @Binding var selectedDuration: SessionDuration
+    @Binding var volume: Float
     let onStart: () -> Void
 
     var body: some View {
@@ -66,6 +67,9 @@ struct ExerciseReadyView: View {
                 }
             }
 
+            // Volume slider
+            VolumeSlider(volume: $volume)
+
             // Start button
             Button("Start") { onStart() }
                 .buttonStyle(AccentButtonStyle())
@@ -78,6 +82,7 @@ struct ExerciseReadyView: View {
         let selected = selectedDuration == duration
         return Text(duration.label)
             .font(.system(size: 13, weight: selected ? .semibold : .regular))
+            .lineLimit(1)
             .foregroundColor(selected ? .black : EarTrainColors.textPrimary)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -85,5 +90,26 @@ struct ExerciseReadyView: View {
             .cornerRadius(8)
             .contentShape(Rectangle())
             .onTapGesture { selectedDuration = duration }
+    }
+}
+
+// MARK: - Shared volume slider
+
+/// Compact speaker-icon + slider control. Used on both the ready screen and
+/// the running-exercise header. Binds directly to AudioEngineManager.outputVolume.
+struct VolumeSlider: View {
+    @Binding var volume: Float
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "speaker.fill")
+                .font(.system(size: 12))
+                .foregroundColor(EarTrainColors.textDisabled)
+            Slider(value: $volume, in: 0...1)
+                .frame(maxWidth: 200)
+            Image(systemName: "speaker.wave.3.fill")
+                .font(.system(size: 12))
+                .foregroundColor(EarTrainColors.textDisabled)
+        }
     }
 }

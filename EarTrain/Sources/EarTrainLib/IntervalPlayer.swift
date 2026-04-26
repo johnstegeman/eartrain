@@ -101,7 +101,7 @@ public final class IntervalPlayer: ObservableObject {
     /// Amplitude is equal-loudness compensated so all pitches sound the
     /// same volume regardless of frequency.
     @MainActor
-    public func play(hz: Float, duration: TimeInterval, amplitude: Float = 0.35) async {
+    public func play(hz: Float, duration: TimeInterval, amplitude: Float = 0.5) async {
         state.frequency = hz
         state.targetAmplitude = Self.equalLoudnessAmplitude(hz: hz, base: amplitude)
         isPlaying = true

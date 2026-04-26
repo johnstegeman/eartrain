@@ -22,6 +22,23 @@ public final class AudioEngineManager: ObservableObject {
     @Published public var isRunning = false
     @Published public var engineError: String?
 
+    /// In-app output volume (0–1). Independent of system volume. Persisted in UserDefaults.
+    /// Applied to `mainMixerNode.volume` so it affects both sine and sample playback.
+    /// Uses an explicit setter (not @Published + didSet) to guarantee the side effect fires.
+    public var outputVolume: Float {
+        get { _outputVolume }
+        set {
+            objectWillChange.send()
+            _outputVolume = newValue
+            UserDefaults.standard.set(newValue, forKey: "outputVolume")
+            engine?.mainMixerNode.outputVolume = newValue
+        }
+    }
+    private var _outputVolume: Float = {
+        let v = UserDefaults.standard.float(forKey: "outputVolume")
+        return v > 0 ? v : 1.0
+    }()
+
     /// Active timbre. Persisted in UserDefaults. Changing this reloads sample buffers.
     @Published public var timbre: GuitarTimbre = GuitarTimbre.persisted {
         didSet {
@@ -122,6 +139,7 @@ public final class AudioEngineManager: ObservableObject {
             self.engine = eng
             self.detector = det
             isRunning = true
+            eng.mainMixerNode.outputVolume = outputVolume
             // Load samples for the current timbre (no-op for .sine).
             samplePlayer.prepare(timbre: timbre)
 

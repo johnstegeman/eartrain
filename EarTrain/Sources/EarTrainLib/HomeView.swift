@@ -7,11 +7,13 @@ import SwiftUI
 public struct HomeView: View {
     @ObservedObject var store: ProgressStore
     @Binding var activeMode: AppMode
+    @Binding var selectedDuration: SessionDuration
     @State private var showingStartSheet = false
 
-    public init(store: ProgressStore, activeMode: Binding<AppMode>) {
+    public init(store: ProgressStore, activeMode: Binding<AppMode>, selectedDuration: Binding<SessionDuration>) {
         self.store = store
         self._activeMode = activeMode
+        self._selectedDuration = selectedDuration
     }
 
     public var body: some View {
@@ -32,7 +34,8 @@ public struct HomeView: View {
         .background(EarTrainColors.bg)
         .onAppear { store.reload() }
         .sheet(isPresented: $showingStartSheet) {
-            SessionStartSheet(activeMode: $activeMode, isPresented: $showingStartSheet)
+            SessionStartSheet(activeMode: $activeMode, isPresented: $showingStartSheet,
+                              selectedDuration: $selectedDuration)
         }
     }
 
@@ -154,8 +157,8 @@ public struct HomeView: View {
 private struct SessionStartSheet: View {
     @Binding var activeMode: AppMode
     @Binding var isPresented: Bool
+    @Binding var selectedDuration: SessionDuration
 
-    @State private var selectedDuration: SessionDuration = .open
     @State private var selectedMode: AppMode = .intervals
 
     var body: some View {
@@ -202,6 +205,7 @@ private struct SessionStartSheet: View {
         let selected = selectedDuration == duration
         return Text(duration.label)
             .font(.system(size: 13, weight: selected ? .semibold : .regular))
+            .lineLimit(1)
             .foregroundColor(selected ? .black : EarTrainColors.textPrimary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
