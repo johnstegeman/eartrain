@@ -220,14 +220,18 @@ public final class AudioEngineManager: ObservableObject {
         guard isRunning else { return }
         // Engine auto-stops on config change; restart it on the new device.
         engineError = nil
+        let tapWasInstalled = micTapInstalled
         stop()
         start()
+        if tapWasInstalled { enableMicTap() }
     }
 
     /// Stop and immediately restart the engine (used when preferred device changes).
     private func restart() {
+        let tapWasInstalled = micTapInstalled
         stop()
         start()
+        if tapWasInstalled { enableMicTap() }
     }
 
     // MARK: - Timbre-routed playback
