@@ -3,14 +3,14 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.eartrain.ci</string>
+    <string>com.audie.app</string>
     <key>CFBundleName</key>
-    <string>EarTrain CI</string>
+    <string>Audie</string>
     <key>CFBundleShortVersionString</key>
     <string>0.1.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>EarTrain CI needs microphone access to hear your guitar playing.</string>
+    <string>Audie needs microphone access to hear your guitar playing.</string>
 </dict>
 </plist>

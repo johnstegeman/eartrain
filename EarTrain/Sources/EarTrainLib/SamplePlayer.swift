@@ -27,6 +27,14 @@ public final class SamplePlayer {
 
     // MARK: - Engine attachment
 
+    /// Release node references so the next `attach(to:)` creates fresh nodes on
+    /// the new engine. Loaded sample buffers are preserved — no need to reload.
+    /// Call this from `AudioEngineManager.stop()` before discarding the old engine.
+    public func reset() {
+        playerNode = nil
+        mixerNode  = nil
+    }
+
     /// Attach the player node to the engine before `engine.start()`.
     /// Routes through a dedicated mixer node so gain can be adjusted without
     /// modifying buffer data.

@@ -55,12 +55,14 @@ public final class ExerciseViewModel: ObservableObject {
         self.audio = audio
     }
 
-    /// Start a new logging session. Call from ExerciseView.onAppear.
+    /// Start a new logging session and enable the mic tap.
+    /// Call from ExerciseView.onAppear.
     public func beginSession() {
         logger = SessionLogger(mode: "intervals")
+        audio.enableMicTap()
     }
 
-    /// Cancel in-flight tasks and end the logging session.
+    /// Cancel in-flight tasks, end the logging session, and release the mic tap.
     /// Does not touch the audio engine (lifecycle is AppSession's responsibility).
     public func cancel() {
         listenTask?.cancel()
@@ -69,6 +71,7 @@ public final class ExerciseViewModel: ObservableObject {
         playTask = nil
         logger?.endSession()
         logger = nil
+        audio.disableMicTap()
     }
 
     // MARK: - Control

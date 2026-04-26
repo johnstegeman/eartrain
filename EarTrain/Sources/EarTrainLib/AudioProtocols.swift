@@ -29,6 +29,13 @@ public protocol MicListening: AnyObject {
     var amplitude: Float { get }
     /// Most recently detected fundamental frequency in Hz. 0 when silent.
     var detectedHz: Float { get }
+    /// Install the hardware mic tap and begin pitch detection.
+    /// Call when entering a guitar-response exercise.
+    func enableMicTap()
+    /// Remove the hardware mic tap. Clears amplitude and detectedHz.
+    /// Call when leaving a guitar-response exercise so the macOS
+    /// microphone-in-use indicator (orange dot) is not shown unnecessarily.
+    func disableMicTap()
 }
 
 // MARK: - Convenience defaults

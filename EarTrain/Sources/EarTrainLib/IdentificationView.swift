@@ -17,7 +17,7 @@ public struct IdentificationView: View {
             answerButtons
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear  { vm.startSession() }
+        .onAppear  { vm.beginSession(); vm.startSession() }
         .onDisappear { vm.cancel() }
     }
 

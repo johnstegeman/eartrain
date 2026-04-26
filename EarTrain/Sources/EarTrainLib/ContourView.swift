@@ -18,7 +18,7 @@ public struct ContourView: View {
             answerButtons
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear  { vm.startExercise() }
+        .onAppear  { vm.beginSession(); vm.startExercise() }
         .onDisappear { vm.cancel() }
     }
 

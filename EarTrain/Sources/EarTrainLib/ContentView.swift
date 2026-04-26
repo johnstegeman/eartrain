@@ -11,6 +11,7 @@ final class AppSession: ObservableObject {
     let contourVM: ContourViewModel
     let identVM: IdentificationViewModel
     let exerciseVM: ExerciseViewModel
+    let progressStore = ProgressStore()
 
     init() {
         let audio = AudioEngineManager()
@@ -81,7 +82,8 @@ public struct ContentView: View {
         case .intervals:      ExerciseView(vm: session.exerciseVM)
         case .contour:        ContourView(vm: session.contourVM)
         case .identification: IdentificationView(vm: session.identVM)
-        case .settings:       SettingsView()
+        case .progress:       ProgressView(store: session.progressStore)
+        case .settings:       SettingsView(audio: session.audio)
         }
     }
 }
@@ -92,6 +94,7 @@ public enum AppMode: CaseIterable {
     case intervals
     case contour
     case identification
+    case progress
     case settings
 
     public var label: String {
@@ -99,6 +102,7 @@ public enum AppMode: CaseIterable {
         case .intervals:      return "Intervals"
         case .contour:        return "Contour"
         case .identification: return "Identify"
+        case .progress:       return "Progress"
         case .settings:       return "Settings"
         }
     }
@@ -115,7 +119,7 @@ private struct MicRequestView: View {
             Text("Microphone Access")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(EarTrainColors.textPrimary)
-            Text("EarTrain CI needs microphone access to hear your guitar playing.")
+            Text("Audie needs microphone access to hear your guitar playing.")
                 .font(.system(size: 14))
                 .foregroundColor(EarTrainColors.textSecondary)
                 .multilineTextAlignment(.center)
@@ -137,7 +141,7 @@ private struct MicBlockedView: View {
             Text("Microphone Access Denied")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(EarTrainColors.textPrimary)
-            Text("Open System Settings → Privacy → Microphone and enable EarTrain CI.")
+            Text("Open System Settings → Privacy → Microphone and enable Audie.")
                 .font(.system(size: 14))
                 .foregroundColor(EarTrainColors.textSecondary)
                 .multilineTextAlignment(.center)

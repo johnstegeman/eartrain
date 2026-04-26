@@ -56,6 +56,9 @@ final class MockMicInput: AudioPlaying & MicListening {
         stopPlaybackCallCount += 1
     }
 
+    func enableMicTap()  {}
+    func disableMicTap() {}
+
     /// Simulate a note onset: set amplitude above threshold and a pitch reading.
     func simulateNote(hz: Float, amplitude: Float = 0.1) {
         self.detectedHz = hz

@@ -35,6 +35,14 @@ public final class ContourViewModel: ObservableObject {
             case .same:   return "equal"
             }
         }
+
+        public var directionKey: String {
+            switch self {
+            case .higher: return "higher"
+            case .lower:  return "lower"
+            case .same:   return "same"
+            }
+        }
     }
 
     // MARK: - Phase
@@ -67,16 +75,25 @@ public final class ContourViewModel: ObservableObject {
     private var rootHz: Float = 440
     private var secondHz: Float = 660
     private var currentTask: Task<Void, Never>?
+    private var logger: SessionLogger?
 
     public init(audio: any AudioPlaying) {
         self.audio = audio
     }
 
-    /// Cancel any in-flight exercise task. Does not touch the audio engine
-    /// (lifecycle is AppSession's responsibility).
+    /// Begin a new logging session. Call before `startExercise()`.
+    public func beginSession() {
+        logger?.endSession()
+        logger = SessionLogger(mode: "contour")
+    }
+
+    /// Cancel any in-flight exercise task. Ends the current logging session.
+    /// Engine lifecycle is AppSession's responsibility.
     public func cancel() {
         currentTask?.cancel()
         currentTask = nil
+        logger?.endSession()
+        logger = nil
     }
 
     // MARK: - Control
@@ -119,6 +136,7 @@ public final class ContourViewModel: ObservableObject {
         totalTrials += 1
         if correct { correctTrials += 1 }
         phase = .result(correct: correct, correctAnswer: correctContour)
+        logger?.logContourTrial(direction: correctContour.directionKey, correct: correct)
 
         currentTask = Task {
             let delay: TimeInterval = correct ? 1.5 : 3.0
@@ -131,11 +149,12 @@ public final class ContourViewModel: ObservableObject {
     // MARK: - Generation
 
     /// Returns (rootHz, secondHz, contour).
-    /// Root is randomly chosen from the guitar range (E2–C5, MIDI 40–72).
+    ///
+    /// Contour and semitone count are chosen first so the root MIDI range can be
+    /// constrained to keep BOTH notes within the guitar sample set (MIDI 40–81).
+    /// Without this, a `.lower` pair from a low root would request a buffer index
+    /// below 40, which SamplePlayer doesn't have — producing silence for note 2.
     private func generatePair() -> (Float, Float, Contour) {
-        let rootMidi = Int.random(in: 40...72)
-        let rootHz = midiToHz(rootMidi)
-
         // Weights: same is less common (20%) to keep the exercise challenging.
         let roll = Int.random(in: 0..<10)
         let contour: Contour
@@ -146,6 +165,16 @@ public final class ContourViewModel: ObservableObject {
         }
 
         let semitones = Int.random(in: semitoneRange)
+
+        // Constrain root so the second note stays within MIDI 40–81.
+        let rootMidi: Int
+        switch contour {
+        case .higher: rootMidi = Int.random(in: 40...max(40, 81 - semitones))
+        case .lower:  rootMidi = Int.random(in: min(72, 40 + semitones)...72)
+        case .same:   rootMidi = Int.random(in: 40...72)
+        }
+
+        let rootHz = midiToHz(rootMidi)
         let secondHz: Float
         switch contour {
         case .higher: secondHz = midiToHz(rootMidi + semitones)

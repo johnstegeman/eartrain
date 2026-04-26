@@ -127,4 +127,13 @@ public final class IntervalPlayer: ObservableObject {
         state.targetAmplitude = 0
         isPlaying = false
     }
+
+    /// Release the source node so the next `attach(to:)` creates a fresh one
+    /// on the new engine. Call this from `AudioEngineManager.stop()` before
+    /// discarding the old engine.
+    public func reset() {
+        state.targetAmplitude   = 0
+        state.currentAmplitude  = 0
+        sourceNode = nil
+    }
 }

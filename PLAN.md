@@ -7,6 +7,95 @@ Status key: `done` / `next` / `planned` / `future`
 
 ---
 
+## Companion persona + app name `planned`
+
+The app should feel like a warm, encouraging coach — not a sterile drill tool.
+
+### App name candidates
+
+The name should sound like a real person — approachable, directly connected to
+ears/music/guitar, and easy to pronounce (important for CI users reading a screen).
+Insider musical puns (solfège, etc.) ruled out; needs to be self-evident.
+
+| Name | Connection | Notes |
+|------|-----------|-------|
+| **Lyra** | the lyre is the original string instrument; Lyra is a real name | Warm, musical without jargon |
+| **Aria** | a vocal melody; also contains "ear"; real first name | Slightly feminine but works |
+| **Cori** | subtle "cochlea" reference; real name, warm | CI-specific without being medical |
+| **Audie** | "audio" + sounds like Audrey; direct hearing link | Friendly, self-evident |
+| **Echo** | sound echo; Greek myth name | Works but Amazon Echo is very branded |
+
+**Decision: Audie** — no existing App Store apps with this exact name, direct
+audio/hearing connection, sounds like a friendly real person. ✓
+
+### Onboarding — ask for a name `planned`
+
+On first launch (after mic permission): a single friendly screen.
+- "Hi! I'm [App Name]. What should I call you?" — text field, placeholder "Your name or nickname"
+- Stored in UserDefaults as `userDisplayName`
+- Never required — "Skip" option defaults to no personalisation
+- Can be changed in Settings
+
+### Companion feedback system `planned`
+
+The app speaks in first person as [App Name]. Feedback is contextual — not every trial,
+only at meaningful moments. Rules:
+
+**Positive moments**
+- Streak of 3+ correct in a row → short praise ("Nice streak, [name]!")
+- Accuracy in a bucket crosses 80% for first time → celebration ("You cracked the Major 3rd!")
+- Session accuracy ≥ 10% above personal best → "New record!"
+- 10th session milestone, 100-trial milestone, 500-trial milestone
+
+**Struggle moments** (trigger ≥ 3 wrong in a row, or session accuracy < 40%)
+- Empathy first: "That one's tricky — [interval] trips up a lot of people."
+- Offer a concrete action (one of):
+  - "Want me to back the difficulty down a notch?" → lower difficulty automatically
+  - "Let's go back to the teaching phase for this one." → replay teaching for that interval
+  - "Sometimes a short break helps. Come back when you're ready." → suggest break
+  - "Want to try the Contour or Identification mode for a bit?" → mode switch suggestion
+
+**Transition moments**
+- First session ever: "Let's start easy and build from here."
+- Returning after ≥ 3 days away: "[Name], welcome back! Let's shake off the rust."
+- End of session: summary + one personal observation ("Your P5 is getting solid.")
+
+**Delivery rules**
+- Plain English, no jargon (no "semitone," "MIDI," "register" in feedback copy)
+- Max one feedback message per ~5 trials to avoid noise
+- Messages vary — keep a pool of 3–5 variants per category, pick randomly
+- Never interrupt playback; queue messages to show after the current trial resolves
+- Feedback copy lives in a dedicated `FeedbackCopy.swift` (easy to edit/localise)
+- Tone: warm, real, slightly casual — like a good private music tutor
+
+### Implementation sketch `planned`
+
+```
+CompanionEngine (ObservableObject)
+  - userName: String          ← from UserDefaults
+  - @Published var pendingMessage: CompanionMessage?
+
+struct CompanionMessage: Identifiable {
+  var id = UUID()
+  var text: String
+  var action: CompanionAction?   // optional CTA button
+}
+
+enum CompanionAction {
+  case lowerDifficulty
+  case replayTeaching
+  case suggestBreak
+  case switchMode(AppMode)
+}
+```
+
+`CompanionEngine` is owned by `AppSession` and injected where needed.
+Each ViewModel notifies it after grading a trial. The engine decides whether
+to surface a message based on streak state, session stats, and the last-message
+timestamp.
+
+---
+
 ## Current state
 
 Three exercise primitives are built and working:
@@ -63,13 +152,13 @@ protocol MicListening  { var amplitude: Float { get }; var detectedHz: Float { g
 
 Unblocks: ExerciseViewModel tests (see 1.2), LessonRunner (see Phase 2).
 
-### 1.2 — ExerciseViewModel pitch detection unit tests `planned`
+### 1.2 — ExerciseViewModel pitch detection unit tests `done`
 Unit tests for the two-note detection pipeline in `ExerciseViewModel` lines 96–188:
 `waitForStableNote()`, `waitForSilence()`, stability window, 10s timeout, 25-cent spread.
 Inject `MockAudioPlayer` and `MockMicInput` via extracted protocols.
 **Depends on:** 1.1
 
-### 1.3 — Confusion matrix + ProgressView `planned`
+### 1.3 — Confusion matrix + ProgressView `done`
 Log every trial to `[Interval: [Register: [ExerciseResult]]]`.
 ProgressView shows interval × register heatmap (green→red) with per-cell drill-down.
 Cells with < 5 trials shown muted. Session-by-session accuracy trend line.
@@ -111,6 +200,31 @@ Skip option: app starts cold with no prior data.
 ---
 
 ## Phase 2 — Lesson Architecture + New Primitives
+
+### 2.0 — Adaptive difficulty engine `planned`
+
+Track per-bucket difficulty level alongside the confusion matrix. Lessons start easy
+and get harder as the user succeeds; if error rate climbs past a threshold the difficulty
+steps back down.
+
+**Two axes of difficulty per primitive:**
+
+| Primitive | Easier | Harder |
+|-----------|--------|--------|
+| `contour` | Wide semitone gap (12), few foil options | Narrow gap (2–3), harder register |
+| `interval-id` | `foilStrategy: "distant"` | `foilStrategy: "adjacent"` |
+| `interval-playback` | Hints on, generous tolerance | Hints off, tight tolerance |
+| Future primitives | Fewer choices, distant foils | More choices, adjacent foils |
+
+**Difficulty level per bucket (stored in cumulative.json):**
+- Level 1–5 integer; starts at 1; increases after `streakToAdvance` consecutive correct
+- Steps back after `streakToFail` consecutive wrong (default 3)
+- Level is per-(interval, register) bucket so a user can be at level 4 for P5/mid
+  but level 1 for m3/low
+
+**Wiring:** `LessonRunner` reads difficulty level from `ProgressStore` when configuring
+each step's parameters. Free-play interval trainer also adapts: after 3 consecutive correct
+in a bucket, the next trial in that bucket gets narrower tolerance.
 
 ### 2.1 — LessonRunner + ExercisePrimitive protocol `planned`
 Extract lesson orchestration from freeplay tab. LessonRunner holds all ViewModels,

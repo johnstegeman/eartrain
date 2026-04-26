@@ -52,15 +52,25 @@ public final class IdentificationViewModel: ObservableObject {
     private var quizRootHz:  Float = 440
     private var correctStreak = 0
     private var currentTask: Task<Void, Never>?
+    private var logger: SessionLogger?
 
     public init(audio: any AudioPlaying) {
         self.audio = audio
     }
 
-    /// Cancel any in-flight task. Engine lifecycle is AppSession's responsibility.
+    /// Begin a new logging session. Call before `startSession()`.
+    public func beginSession() {
+        logger?.endSession()
+        logger = SessionLogger(mode: "identification")
+    }
+
+    /// Cancel any in-flight task. Ends the current logging session.
+    /// Engine lifecycle is AppSession's responsibility.
     public func cancel() {
         currentTask?.cancel()
         currentTask = nil
+        logger?.endSession()
+        logger = nil
     }
 
     // MARK: - Control
@@ -80,6 +90,8 @@ public final class IdentificationViewModel: ObservableObject {
         else        { correctStreak = 0 }
 
         phase = .result(correct: correct, wasTarget: quizIsTarget, actual: quizInterval)
+        logger?.logIdentificationTrial(interval: quizInterval, rootHz: quizRootHz,
+                                       correct: correct)
 
         // Rotate focus interval after a streak of correct answers.
         if correctStreak >= streakToAdvance {
