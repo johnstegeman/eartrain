@@ -2,7 +2,10 @@ import AVFoundation
 
 /// Plays pre-rendered guitar WAV samples for interval training.
 ///
-/// WAV files live in `Samples/{timbre}/note_0XX.wav` inside the module bundle.
+/// WAV files live in `Samples_normalized/{timbre}/note_0XX.wav` inside the module bundle.
+/// They are ISO 226:2003 equal-loudness normalized — all notes sound equally loud to a
+/// normal-hearing listener regardless of register. See scripts/normalize_samples.py.
+///
 /// They are loaded into `AVAudioPCMBuffer` objects at `prepare(timbre:)` time
 /// so playback is glitch-free (no disk I/O on the audio thread).
 ///
@@ -13,10 +16,6 @@ public final class SamplePlayer {
 
     public static let midiLow  = 40
     public static let midiHigh = 81
-
-    /// Amplitude scaling applied at load time to match the sine-wave IntervalPlayer's
-    /// perceived loudness (which uses base amplitude 0.35 on a [0, 1] scale).
-    private static let gainFactor: Float = 0.7
 
     // MARK: - Private state
 
@@ -43,7 +42,6 @@ public final class SamplePlayer {
             engine.connect(player, to: mixer,              format: format)
             engine.connect(mixer,  to: engine.mainMixerNode, format: format)
         }
-        mixer.outputVolume = Self.gainFactor
 
         playerNode = player
         mixerNode  = mixer
@@ -65,7 +63,7 @@ public final class SamplePlayer {
             guard let url = Bundle.module.url(
                     forResource: name,
                     withExtension: "wav",
-                    subdirectory: "Samples/\(timbre.rawValue)")
+                    subdirectory: "Samples_normalized/\(timbre.rawValue)")
             else { continue }
 
             guard let file   = try? AVAudioFile(forReading: url),
