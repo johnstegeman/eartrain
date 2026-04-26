@@ -1,6 +1,6 @@
 import Foundation
 
-/// The four playback timbres available in EarTrain CI.
+/// The four playback timbres available in Audie.
 ///
 /// The `.sine` case uses the existing real-time `IntervalPlayer`.
 /// The three guitar cases use `SamplePlayer`, which loads pre-rendered WAV

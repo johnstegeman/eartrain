@@ -1,9 +1,32 @@
 import SwiftUI
 import AVFoundation
 
+/// Top-level owner of the shared audio engine and all freeplay ViewModels.
+/// One AudioEngineManager instance is created here and injected into each VM,
+/// ensuring all modes share a single engine (CI keep-alive stays active across
+/// tab switches; no redundant mic taps).
+@MainActor
+final class AppSession: ObservableObject {
+    let audio: AudioEngineManager
+    let contourVM: ContourViewModel
+    let identVM: IdentificationViewModel
+    let exerciseVM: ExerciseViewModel
+    let progressStore = ProgressStore()
+
+    init() {
+        let audio = AudioEngineManager()
+        self.audio    = audio
+        contourVM     = ContourViewModel(audio: audio)
+        identVM       = IdentificationViewModel(audio: audio)
+        exerciseVM    = ExerciseViewModel(audio: audio)
+    }
+}
+
 public struct ContentView: View {
+    @StateObject private var session = AppSession()
     @StateObject private var mic = MicrophonePermissionManager()
-    @State private var mode: AppMode = .intervals
+    @State private var mode: AppMode = .home
+    @State private var sessionDuration: SessionDuration = .open
 
     public init() {}
 
@@ -25,6 +48,10 @@ public struct ContentView: View {
         .background(EarTrainColors.bg)
         .task {
             await mic.requestIfNeeded()
+            if mic.isAuthorized { session.audio.start() }
+        }
+        .onChange(of: mic.isAuthorized) { authorized in
+            if authorized { session.audio.start() }
         }
     }
 
@@ -53,10 +80,12 @@ public struct ContentView: View {
     @ViewBuilder
     private var modeContent: some View {
         switch mode {
-        case .intervals:      ExerciseView()
-        case .contour:        ContourView()
-        case .identification: IdentificationView()
-        case .settings:       SettingsView()
+        case .home:           HomeView(store: session.progressStore, activeMode: $mode, selectedDuration: $sessionDuration)
+        case .intervals:      ExerciseView(vm: session.exerciseVM, store: session.progressStore, audio: session.audio, activeMode: $mode, selectedDuration: $sessionDuration)
+        case .contour:        ContourView(vm: session.contourVM, store: session.progressStore, audio: session.audio, activeMode: $mode, selectedDuration: $sessionDuration)
+        case .identification: IdentificationView(vm: session.identVM, store: session.progressStore, audio: session.audio, activeMode: $mode, selectedDuration: $sessionDuration)
+        case .progress:       ProgressView(store: session.progressStore)
+        case .settings:       SettingsView(audio: session.audio)
         }
     }
 }
@@ -64,17 +93,45 @@ public struct ContentView: View {
 // MARK: - App mode
 
 public enum AppMode: CaseIterable {
+    case home
     case intervals
     case contour
     case identification
+    case progress
     case settings
 
     public var label: String {
         switch self {
+        case .home:           return "Home"
         case .intervals:      return "Intervals"
         case .contour:        return "Contour"
         case .identification: return "Identify"
+        case .progress:       return "Progress"
         case .settings:       return "Settings"
+        }
+    }
+
+    /// SF Symbol for use in the session start sheet and HomeView mode cards.
+    public var icon: String {
+        switch self {
+        case .home:           return "house.fill"
+        case .intervals:      return "guitars.fill"
+        case .contour:        return "arrow.up.arrow.down"
+        case .identification: return "ear.fill"
+        case .progress:       return "chart.bar.fill"
+        case .settings:       return "gearshape.fill"
+        }
+    }
+
+    /// One-line description shown on mode cards and in the start sheet.
+    public var exerciseDescription: String {
+        switch self {
+        case .home:           return ""
+        case .intervals:      return "Play back intervals on your guitar — mic grades your response"
+        case .contour:        return "Higher, lower, or same? The simplest pitch discrimination exercise"
+        case .identification: return "Hear an interval and identify it by ear only"
+        case .progress:       return ""
+        case .settings:       return ""
         }
     }
 }
@@ -90,7 +147,7 @@ private struct MicRequestView: View {
             Text("Microphone Access")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(EarTrainColors.textPrimary)
-            Text("EarTrain CI needs microphone access to hear your guitar playing.")
+            Text("Audie needs microphone access to hear your guitar playing.")
                 .font(.system(size: 14))
                 .foregroundColor(EarTrainColors.textSecondary)
                 .multilineTextAlignment(.center)
@@ -112,7 +169,7 @@ private struct MicBlockedView: View {
             Text("Microphone Access Denied")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(EarTrainColors.textPrimary)
-            Text("Open System Settings → Privacy → Microphone and enable EarTrain CI.")
+            Text("Open System Settings → Privacy → Microphone and enable Audie.")
                 .font(.system(size: 14))
                 .foregroundColor(EarTrainColors.textSecondary)
                 .multilineTextAlignment(.center)

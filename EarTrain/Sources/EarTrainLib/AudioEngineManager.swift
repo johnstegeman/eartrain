@@ -1,5 +1,7 @@
 import Accelerate
+import AudioToolbox   // kAudioOutputUnitProperty_CurrentDevice
 import AVFoundation
+import CoreAudio
 import SwiftUI
 
 /// Manages the shared AVAudioEngine — mic input tap (pitch detection)
@@ -19,6 +21,23 @@ public final class AudioEngineManager: ObservableObject {
     @Published public var amplitude: Float = 0
     @Published public var isRunning = false
     @Published public var engineError: String?
+
+    /// In-app output volume (0–1). Independent of system volume. Persisted in UserDefaults.
+    /// Applied to `mainMixerNode.volume` so it affects both sine and sample playback.
+    /// Uses an explicit setter (not @Published + didSet) to guarantee the side effect fires.
+    public var outputVolume: Float {
+        get { _outputVolume }
+        set {
+            objectWillChange.send()
+            _outputVolume = newValue
+            UserDefaults.standard.set(newValue, forKey: "outputVolume")
+            engine?.mainMixerNode.outputVolume = newValue
+        }
+    }
+    private var _outputVolume: Float = {
+        let v = UserDefaults.standard.float(forKey: "outputVolume")
+        return v > 0 ? v : 1.0
+    }()
 
     /// Active timbre. Persisted in UserDefaults. Changing this reloads sample buffers.
     @Published public var timbre: GuitarTimbre = GuitarTimbre.persisted {
@@ -44,10 +63,37 @@ public final class AudioEngineManager: ObservableObject {
     /// True when the engine is running and keepAlive is enabled.
     public var keepAliveActive: Bool { isRunning && keepAliveEnabled }
 
+    // MARK: - Device selection
+
+    /// UID of the preferred output device (e.g., CI Bluetooth stream).
+    /// Empty string = follow the system default.
+    /// Persisted in UserDefaults; changing it while running restarts the engine.
+    @Published public var preferredOutputUID: String =
+        UserDefaults.standard.string(forKey: "preferredOutputUID") ?? "" {
+        didSet {
+            UserDefaults.standard.set(preferredOutputUID, forKey: "preferredOutputUID")
+            if isRunning { restart() }
+        }
+    }
+
+    /// UID of the preferred input device (e.g., an audio interface).
+    /// Empty string = follow the system default.
+    @Published public var preferredInputUID: String =
+        UserDefaults.standard.string(forKey: "preferredInputUID") ?? "" {
+        didSet {
+            UserDefaults.standard.set(preferredInputUID, forKey: "preferredInputUID")
+            if isRunning { restart() }
+        }
+    }
+
     // MARK: - Private
 
     private var engine: AVAudioEngine?
     private var detector: PitchDetector?
+    private var configChangeObserver: NSObjectProtocol?
+    /// Saved at start() time so enableMicTap() can reinstall with the same format.
+    private var savedInputFormat: AVAudioFormat?
+    private var micTapInstalled = false
 
     /// Tap buffer size — 4096 samples ≈ 93 ms at 44100 Hz.
     private let bufferSize: AVAudioFrameCount = 4096
@@ -71,8 +117,59 @@ public final class AudioEngineManager: ObservableObject {
         let sampleRate = Float(inputFormat.sampleRate)
         let det = PitchDetector(sampleRate: sampleRate)
 
-        // --- Mic tap for pitch detection ---
-        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: inputFormat) { [weak self] buffer, _ in
+        // Save format for enableMicTap() — tap not installed yet.
+        // The mic tap is only active while a guitar-response exercise is running,
+        // so the macOS microphone-in-use indicator stays off otherwise.
+        savedInputFormat = inputFormat
+
+        // --- Interval tone output (must attach before engine.start()) ---
+        intervalPlayer.attach(to: eng, sampleRate: sampleRate)
+        samplePlayer.attach(to: eng)
+
+        // --- Apply preferred devices before start ---
+        if let dev = AudioDeviceList.device(forUID: preferredOutputUID) {
+            applyDevice(dev.id, to: eng.outputNode)
+        }
+        if let dev = AudioDeviceList.device(forUID: preferredInputUID) {
+            applyDevice(dev.id, to: eng.inputNode)
+        }
+
+        do {
+            try eng.start()
+            self.engine = eng
+            self.detector = det
+            isRunning = true
+            eng.mainMixerNode.outputVolume = outputVolume
+            // Load samples for the current timbre (no-op for .sine).
+            samplePlayer.prepare(timbre: timbre)
+
+            // Observe hardware config changes (device disconnect, format change,
+            // or system default switch). The engine self-stops on such events;
+            // we restart it so audio resumes on the new device.
+            configChangeObserver = NotificationCenter.default.addObserver(
+                forName: .AVAudioEngineConfigurationChange,
+                object: eng,
+                queue: nil
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.handleConfigurationChange() }
+            }
+        } catch {
+            engineError = "Couldn't start audio engine: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Mic tap control
+
+    /// Install the hardware mic tap and begin pitch detection.
+    /// The tap is NOT active by default — only install it while a
+    /// guitar-response exercise is running so the macOS orange dot disappears
+    /// when the user is on other tabs.
+    public func enableMicTap() {
+        guard let eng = engine,
+              let format = savedInputFormat,
+              let det = detector,
+              !micTapInstalled else { return }
+        eng.inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: format) { [weak self] buffer, _ in
             guard let self else { return }
             var rms: Float = 0
             if let data = buffer.floatChannelData {
@@ -87,21 +184,46 @@ public final class AudioEngineManager: ObservableObject {
                 }
             }
         }
+        micTapInstalled = true
+    }
 
-        // --- Interval tone output (must attach before engine.start()) ---
-        intervalPlayer.attach(to: eng, sampleRate: sampleRate)
-        samplePlayer.attach(to: eng)
+    /// Remove the hardware mic tap. Clears amplitude/pitch readings.
+    public func disableMicTap() {
+        guard let eng = engine, micTapInstalled else { return }
+        eng.inputNode.removeTap(onBus: 0)
+        micTapInstalled = false
+        amplitude    = 0
+        detectedHz   = 0
+        detectedNote = "--"
+    }
 
-        do {
-            try eng.start()
-            self.engine = eng
-            self.detector = det
-            isRunning = true
-            // Load samples for the current timbre (no-op for .sine).
-            samplePlayer.prepare(timbre: timbre)
-        } catch {
-            engineError = "Couldn't start audio engine: \(error.localizedDescription)"
-        }
+    // MARK: - Device application
+
+    /// Set a specific CoreAudio device on an AVAudioEngine I/O node's underlying AudioUnit.
+    /// Must be called before `engine.start()`. Silently skips if the AudioUnit isn't available.
+    private func applyDevice(_ deviceID: AudioDeviceID, to node: AVAudioIONode) {
+        guard let unit = node.audioUnit else { return }
+        var id = deviceID
+        AudioUnitSetProperty(unit,
+                             kAudioOutputUnitProperty_CurrentDevice,
+                             kAudioUnitScope_Global, 0,
+                             &id, UInt32(MemoryLayout<AudioDeviceID>.size))
+    }
+
+    // MARK: - Config change handling
+
+    private func handleConfigurationChange() {
+        guard isRunning else { return }
+        // Engine auto-stops on config change; restart it on the new device.
+        engineError = nil
+        stop()
+        start()
+    }
+
+    /// Stop and immediately restart the engine (used when preferred device changes).
+    private func restart() {
+        stop()
+        start()
     }
 
     // MARK: - Timbre-routed playback
@@ -145,11 +267,25 @@ public final class AudioEngineManager: ObservableObject {
     }
 
     public func stop() {
+        if let obs = configChangeObserver {
+            NotificationCenter.default.removeObserver(obs)
+            configChangeObserver = nil
+        }
         stopPlayback()
-        engine?.inputNode.removeTap(onBus: 0)
+        if micTapInstalled {
+            engine?.inputNode.removeTap(onBus: 0)
+            micTapInstalled = false
+        }
         engine?.stop()
         engine = nil
         detector = nil
+        savedInputFormat = nil
         isRunning = false
+        amplitude    = 0
+        detectedHz   = 0
+        detectedNote = "--"
+        // Reset sub-players so they re-attach cleanly to the next engine.
+        intervalPlayer.reset()
+        samplePlayer.reset()
     }
 }

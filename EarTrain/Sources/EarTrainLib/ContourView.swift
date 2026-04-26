@@ -7,22 +7,71 @@ import SwiftUI
 /// the first. Designed as the entry point for CI users who are not yet ready
 /// for interval identification.
 public struct ContourView: View {
-    @StateObject private var vm = ContourViewModel()
+    @ObservedObject var vm: ContourViewModel
+    @ObservedObject var store: ProgressStore
+    @ObservedObject var audio: AudioEngineManager
+    @Binding var activeMode: AppMode
 
-    public init() {}
+    @Binding var selectedDuration: SessionDuration
+    @State private var sessionSummary: SessionEndSummary? = nil
+
+    public init(vm: ContourViewModel, store: ProgressStore, audio: AudioEngineManager,
+                activeMode: Binding<AppMode>, selectedDuration: Binding<SessionDuration>) {
+        self.vm = vm
+        self.store = store
+        self.audio = audio
+        self._activeMode = activeMode
+        self._selectedDuration = selectedDuration
+    }
 
     public var body: some View {
-        VStack(spacing: 32) {
-            scorePanel
-            statusPanel
-            answerButtons
+        Group {
+            if vm.phase == .idle {
+                ExerciseReadyView(mode: .contour, selectedDuration: $selectedDuration,
+                                  volume: $audio.outputVolume) {
+                    vm.beginSession()
+                    vm.startExercise()
+                }
+            } else {
+                VStack(spacing: 0) {
+                    endSessionBar
+                    VStack(spacing: 32) {
+                        scorePanel
+                        statusPanel
+                        answerButtons
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            vm.startEngine()
-            vm.startExercise()
+        .onDisappear { vm.cancel() }
+        .sheet(item: $sessionSummary) { summary in
+            EndOfSessionView(summary: summary, store: store, activeMode: $activeMode)
         }
-        .onDisappear { vm.stopEngine() }
+    }
+
+    private var endSessionBar: some View {
+        HStack {
+            VolumeSlider(volume: $audio.outputVolume)
+            Spacer()
+            Button("End Session") { endSession() }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(EarTrainColors.textDisabled)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+    }
+
+    private func endSession() {
+        let summary = SessionEndSummary(
+            mode: .contour,
+            totalTrials: vm.totalTrials,
+            correctTrials: vm.correctTrials,
+            duration: vm.sessionDuration
+        )
+        vm.cancel()
+        sessionSummary = summary
     }
 
     // MARK: - Score

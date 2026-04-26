@@ -101,7 +101,7 @@ public final class IntervalPlayer: ObservableObject {
     /// Amplitude is equal-loudness compensated so all pitches sound the
     /// same volume regardless of frequency.
     @MainActor
-    public func play(hz: Float, duration: TimeInterval, amplitude: Float = 0.35) async {
+    public func play(hz: Float, duration: TimeInterval, amplitude: Float = 0.5) async {
         state.frequency = hz
         state.targetAmplitude = Self.equalLoudnessAmplitude(hz: hz, base: amplitude)
         isPlaying = true
@@ -126,5 +126,14 @@ public final class IntervalPlayer: ObservableObject {
     public func stop() {
         state.targetAmplitude = 0
         isPlaying = false
+    }
+
+    /// Release the source node so the next `attach(to:)` creates a fresh one
+    /// on the new engine. Call this from `AudioEngineManager.stop()` before
+    /// discarding the old engine.
+    public func reset() {
+        state.targetAmplitude   = 0
+        state.currentAmplitude  = 0
+        sourceNode = nil
     }
 }

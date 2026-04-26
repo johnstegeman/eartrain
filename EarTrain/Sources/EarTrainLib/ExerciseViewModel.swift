@@ -30,42 +30,59 @@ public final class ExerciseViewModel: ObservableObject {
     @Published public var phase: Phase = .idle
     @Published public var currentInterval: Interval = .m3
     @Published public var rootHz: Float = 440.0   // A4 default; used for playback only
+    @Published public var totalTrials: Int = 0
+    @Published public var correctTrials: Int = 0
 
     // MARK: - Settings
 
     /// Active interval set — defaults to priority drill set from DESIGN.md.
     public var activeIntervals: [Interval] = [.m3, .M3, .P5, .P8]
 
-    // MARK: - Audio (owned here so ExerciseView can use @StateObject cleanly)
+    // MARK: - Audio (injected — owned by AppSession)
 
-    public let audio = AudioEngineManager()
+    private let audio: any AudioPlaying & MicListening
 
     // MARK: - Private
 
     private var listenTask: Task<Void, Never>?
     private var playTask:   Task<Void, Never>?
     private var logger: SessionLogger?
+    private var sessionStartDate: Date? = nil
+
+    /// Elapsed time since `beginSession()` was called. Snapshot this before calling `cancel()`.
+    public var sessionDuration: TimeInterval {
+        sessionStartDate.map { Date().timeIntervalSince($0) } ?? 0
+    }
 
     private let stabilityCount  = 3
     private let stabilityCents: Float = 25
     private let amplitudeThreshold: Float = 0.02
     private let listenTimeoutSeconds: TimeInterval = 10  // per note, not total
 
-    public init() {}
-
-    public func startEngine() {
-        audio.start()
-        logger = SessionLogger(mode: "intervals")
+    public init(audio: any AudioPlaying & MicListening) {
+        self.audio = audio
     }
 
-    public func stopEngine() {
+    /// Start a new logging session and enable the mic tap.
+    public func beginSession() {
+        logger = SessionLogger(mode: "intervals")
+        audio.enableMicTap()
+        sessionStartDate = Date()
+        totalTrials  = 0
+        correctTrials = 0
+    }
+
+    /// Cancel in-flight tasks, end the logging session, and release the mic tap.
+    /// Does not touch the audio engine (lifecycle is AppSession's responsibility).
+    public func cancel() {
         listenTask?.cancel()
         listenTask = nil
         playTask?.cancel()
         playTask = nil
-        audio.stop()
         logger?.endSession()
         logger = nil
+        audio.disableMicTap()
+        phase = .idle
     }
 
     // MARK: - Control
@@ -113,7 +130,9 @@ public final class ExerciseViewModel: ObservableObject {
             guard let detectedRoot = await self.waitForStableNote() else {
                 guard !Task.isCancelled else { return }
                 self.logger?.logNoRead(interval: interval, rootHz: self.rootHz)
-                self.phase = .noRead; return
+                self.phase = .noRead
+                self.totalTrials += 1
+                return
             }
             guard !Task.isCancelled else { return }
 
@@ -126,7 +145,9 @@ public final class ExerciseViewModel: ObservableObject {
             guard let detectedInterval = await self.waitForStableNote() else {
                 guard !Task.isCancelled else { return }
                 self.logger?.logNoRead(interval: interval, rootHz: detectedRoot)
-                self.phase = .noRead; return
+                self.phase = .noRead
+                self.totalTrials += 1
+                return
             }
             guard !Task.isCancelled else { return }
 
@@ -141,6 +162,8 @@ public final class ExerciseViewModel: ObservableObject {
                                    detectedHz: detectedInterval,
                                    result: result)
             self.phase = .result(result)
+            self.totalTrials += 1
+            if case .correct = result { self.correctTrials += 1 }
 
             let delay: TimeInterval
             switch result {
