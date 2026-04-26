@@ -1,24 +1,32 @@
+import Combine
 import SwiftUI
 import AVFoundation
 
-/// Top-level owner of the shared audio engine and all freeplay ViewModels.
-/// One AudioEngineManager instance is created here and injected into each VM,
-/// ensuring all modes share a single engine (CI keep-alive stays active across
-/// tab switches; no redundant mic taps).
+/// Top-level owner of the shared audio engine, companion, and all exercise ViewModels.
 @MainActor
 final class AppSession: ObservableObject {
     let audio: AudioEngineManager
+    let companion: CompanionEngine
     let contourVM: ContourViewModel
     let identVM: IdentificationViewModel
     let exerciseVM: ExerciseViewModel
     let progressStore = ProgressStore()
 
+    private var cancellable: AnyCancellable?
+
     init() {
         let audio = AudioEngineManager()
-        self.audio    = audio
-        contourVM     = ContourViewModel(audio: audio)
-        identVM       = IdentificationViewModel(audio: audio)
-        exerciseVM    = ExerciseViewModel(audio: audio)
+        let companion = CompanionEngine()
+        self.audio     = audio
+        self.companion = companion
+        contourVM  = ContourViewModel(audio: audio)
+        identVM    = IdentificationViewModel(audio: audio)
+        exerciseVM = ExerciseViewModel(audio: audio)
+
+        // Forward companion changes to AppSession so ContentView re-renders
+        // when hasCompletedOnboarding (or any companion state) changes.
+        cancellable = companion.objectWillChange
+            .sink { [weak self] in self?.objectWillChange.send() }
     }
 }
 
@@ -32,7 +40,9 @@ public struct ContentView: View {
 
     public var body: some View {
         Group {
-            if mic.isAuthorized {
+            if mic.isAuthorized && !session.companion.hasCompletedOnboarding {
+                OnboardingView(companion: session.companion)
+            } else if mic.isAuthorized {
                 VStack(spacing: 0) {
                     modePicker
                     Divider().background(EarTrainColors.surface)
@@ -52,6 +62,16 @@ public struct ContentView: View {
         }
         .onChange(of: mic.isAuthorized) { authorized in
             if authorized { session.audio.start() }
+        }
+        .onAppear {
+            // Wire companion's mode-switch action to this view's mode binding.
+            session.companion.onSwitchMode = { [weak session] newMode in
+                self.mode = newMode
+                // Cancel whatever is currently in progress when switching mode.
+                session?.contourVM.cancel()
+                session?.identVM.cancel()
+                session?.exerciseVM.cancel()
+            }
         }
     }
 
@@ -80,12 +100,24 @@ public struct ContentView: View {
     @ViewBuilder
     private var modeContent: some View {
         switch mode {
-        case .home:           HomeView(store: session.progressStore, activeMode: $mode, selectedDuration: $sessionDuration)
-        case .intervals:      ExerciseView(vm: session.exerciseVM, store: session.progressStore, audio: session.audio, activeMode: $mode, selectedDuration: $sessionDuration)
-        case .contour:        ContourView(vm: session.contourVM, store: session.progressStore, audio: session.audio, activeMode: $mode, selectedDuration: $sessionDuration)
-        case .identification: IdentificationView(vm: session.identVM, store: session.progressStore, audio: session.audio, activeMode: $mode, selectedDuration: $sessionDuration)
-        case .progress:       ProgressView(store: session.progressStore)
-        case .settings:       SettingsView(audio: session.audio)
+        case .home:
+            HomeView(store: session.progressStore, activeMode: $mode, selectedDuration: $sessionDuration)
+        case .intervals:
+            ExerciseView(vm: session.exerciseVM, store: session.progressStore,
+                         audio: session.audio, companion: session.companion,
+                         activeMode: $mode, selectedDuration: $sessionDuration)
+        case .contour:
+            ContourView(vm: session.contourVM, store: session.progressStore,
+                        audio: session.audio, companion: session.companion,
+                        activeMode: $mode, selectedDuration: $sessionDuration)
+        case .identification:
+            IdentificationView(vm: session.identVM, store: session.progressStore,
+                               audio: session.audio, companion: session.companion,
+                               activeMode: $mode, selectedDuration: $sessionDuration)
+        case .progress:
+            ProgressView(store: session.progressStore)
+        case .settings:
+            SettingsView(audio: session.audio, store: session.progressStore)
         }
     }
 }
@@ -111,7 +143,6 @@ public enum AppMode: CaseIterable {
         }
     }
 
-    /// SF Symbol for use in the session start sheet and HomeView mode cards.
     public var icon: String {
         switch self {
         case .home:           return "house.fill"
@@ -123,7 +154,6 @@ public enum AppMode: CaseIterable {
         }
     }
 
-    /// One-line description shown on mode cards and in the start sheet.
     public var exerciseDescription: String {
         switch self {
         case .home:           return ""
@@ -136,7 +166,7 @@ public enum AppMode: CaseIterable {
     }
 }
 
-// MARK: - Permission request state
+// MARK: - Permission views
 
 private struct MicRequestView: View {
     var body: some View {
@@ -155,8 +185,6 @@ private struct MicRequestView: View {
         }
     }
 }
-
-// MARK: - Permission blocked state
 
 private struct MicBlockedView: View {
     let openSettings: () -> Void

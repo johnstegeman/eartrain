@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Drives Identification Mode — "Is this a m3?"
 ///
-/// Exercise loop (from DESIGN.md):
+/// Exercise loop:
 ///   1. App plays focus interval + shows its name ("This is a Minor 3rd") — teaching
 ///   2. App plays a new pair (target or foil) without revealing the name — quiz
 ///   3. User taps Yes / No
@@ -10,18 +10,16 @@ import SwiftUI
 ///
 /// After `streakToAdvance` consecutive correct answers, the focus interval
 /// rotates so the user progressively covers the full set.
-///
-/// Listening-only — no guitar required.
 @MainActor
-public final class IdentificationViewModel: ObservableObject {
+public final class IdentificationViewModel: ObservableObject, DifficultyAdjustable {
 
     // MARK: - Phase
 
     public enum Phase: Equatable {
         case idle
-        case teaching           // playing focus interval; label visible
-        case playingQuiz        // playing quiz interval; name hidden
-        case awaitingAnswer     // waiting for Yes / No
+        case teaching
+        case playingQuiz
+        case awaitingAnswer
         case result(correct: Bool, wasTarget: Bool, actual: Interval)
     }
 
@@ -32,30 +30,66 @@ public final class IdentificationViewModel: ObservableObject {
     @Published public var totalTrials: Int = 0
     @Published public var correctTrials: Int = 0
 
-    // MARK: - Audio (injected — owned by AppSession)
+    /// 1 = easiest (2-interval pool, maximally different), 5 = hardest (6-interval pool).
+    @Published public var difficultyLevel: Int = 3 {
+        didSet {
+            // If the current focus interval fell out of the new pool, pick a new one.
+            if !activeIntervals.contains(focusInterval) {
+                focusInterval = activeIntervals.randomElement() ?? .P5
+            }
+        }
+    }
+
+    @Published public var timeRemainingSeconds: Int? = nil
+    @Published public var sessionExpired: Bool = false
+
+    // MARK: - Audio
 
     private let audio: any AudioPlaying
 
-    // MARK: - Configuration
+    // MARK: - Difficulty
 
-    /// Pool of intervals rotated through as focus changes.
-    public var activeIntervals: [Interval] = [.m3, .M3, .P5, .P8]
+    /// Active interval pool — smaller at easy levels, grows as difficulty rises.
+    private var activeIntervals: [Interval] {
+        switch difficultyLevel {
+        case 1:  return [.P5, .P8]                          // 2 intervals, max gap (5 st)
+        case 2:  return [.M3, .P5, .P8]                     // 3 intervals
+        case 3:  return [.m3, .M3, .P5, .P8]               // 4 (default — priority drill set)
+        case 4:  return [.m3, .M3, .P4, .P5, .P8]          // 5 intervals
+        default: return [.m3, .M3, .P4, .P5, .M6, .P8]    // 6 intervals
+        }
+    }
 
-    /// Correct answers in a row before moving to the next focus interval.
+    /// Human-readable description for each difficulty level (1–5).
+    public var difficultyDescriptions: [String] {
+        [
+            "P5 and octave only",
+            "Add major third (M3)",
+            "Add minor third (m3) — default",
+            "Add perfect fourth (P4)",
+            "All six intervals",
+        ]
+    }
+
+    public func lowerDifficulty() { difficultyLevel = max(1, difficultyLevel - 1) }
+    public func raiseDifficulty() { difficultyLevel = min(5, difficultyLevel + 1) }
+
+    /// Correct answers in a row before rotating to the next focus interval.
     public let streakToAdvance = 3
 
     // MARK: - Private
 
-    private var quizIsTarget = true
+    private var quizIsTarget  = true
     private var quizInterval: Interval = .m3
     private var teachRootHz: Float = 440
     private var quizRootHz:  Float = 440
     private var correctStreak = 0
     private var currentTask: Task<Void, Never>?
+    private var timerTask:   Task<Void, Never>?
+    private var timerExpired = false
     private var logger: SessionLogger?
     private var sessionStartDate: Date? = nil
 
-    /// Elapsed time since `beginSession()` was called. Snapshot this before calling `cancel()`.
     public var sessionDuration: TimeInterval {
         sessionStartDate.map { Date().timeIntervalSince($0) } ?? 0
     }
@@ -64,23 +98,46 @@ public final class IdentificationViewModel: ObservableObject {
         self.audio = audio
     }
 
-    /// Begin a new logging session. Call before `startSession()`.
-    public func beginSession() {
+    // MARK: - Session lifecycle
+
+    public func beginSession(duration: SessionDuration = .open) {
         logger?.endSession()
         logger = SessionLogger(mode: "identification")
         sessionStartDate = Date()
-        totalTrials  = 0
+        totalTrials   = 0
         correctTrials = 0
+        timerExpired  = false
+        sessionExpired = false
+
+        timerTask?.cancel()
+        if let minutes = duration.minutes {
+            let endDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
+            timerTask = Task { [weak self] in
+                guard let self else { return }
+                while Date() < endDate, !Task.isCancelled {
+                    self.timeRemainingSeconds = max(0, Int(endDate.timeIntervalSince(Date())))
+                    try? await Task.sleep(for: .seconds(1))
+                }
+                guard !Task.isCancelled else { return }
+                self.timerExpired = true
+                self.timeRemainingSeconds = 0
+            }
+        } else {
+            timeRemainingSeconds = nil
+        }
     }
 
-    /// Cancel any in-flight task. Ends the current logging session.
-    /// Engine lifecycle is AppSession's responsibility.
     public func cancel() {
+        timerTask?.cancel()
+        timerTask = nil
         currentTask?.cancel()
         currentTask = nil
         logger?.endSession()
         logger = nil
         phase = .idle
+        timeRemainingSeconds = nil
+        timerExpired  = false
+        sessionExpired = false
     }
 
     // MARK: - Control
@@ -91,7 +148,7 @@ public final class IdentificationViewModel: ObservableObject {
         playTeaching()
     }
 
-    public func answer(_ yes: Bool) {
+    public func answer(_ yes: Bool, onResult: ((Bool) -> Void)? = nil) {
         guard case .awaitingAnswer = phase else { return }
 
         let correct = yes == quizIsTarget
@@ -102,8 +159,8 @@ public final class IdentificationViewModel: ObservableObject {
         phase = .result(correct: correct, wasTarget: quizIsTarget, actual: quizInterval)
         logger?.logIdentificationTrial(interval: quizInterval, rootHz: quizRootHz,
                                        correct: correct)
+        onResult?(correct)
 
-        // Rotate focus interval after a streak of correct answers.
         if correctStreak >= streakToAdvance {
             correctStreak = 0
             let others = activeIntervals.filter { $0 != focusInterval }
@@ -111,10 +168,15 @@ public final class IdentificationViewModel: ObservableObject {
         }
 
         currentTask?.cancel()
-        currentTask = Task {
+        currentTask = Task { [weak self] in
+            guard let self else { return }
             try? await Task.sleep(for: .seconds(correct ? 1.5 : 3.0))
             guard !Task.isCancelled else { return }
-            startNextRound()
+            if self.timerExpired {
+                self.sessionExpired = true
+            } else {
+                self.startNextRound()
+            }
         }
     }
 
@@ -134,14 +196,8 @@ public final class IdentificationViewModel: ObservableObject {
 
     // MARK: - Private
 
-    /// Teaching only when starting fresh: new focus interval, or just got one wrong.
-    /// Once the user is on a streak, skip straight to the quiz.
     private func startNextRound() {
-        if correctStreak == 0 {
-            playTeaching()
-        } else {
-            playQuiz()
-        }
+        if correctStreak == 0 { playTeaching() } else { playQuiz() }
     }
 
     private func playTeaching() {
@@ -163,13 +219,12 @@ public final class IdentificationViewModel: ObservableObject {
     }
 
     private func playQuiz() {
-        // 50 / 50 target vs. foil
-        quizIsTarget  = Bool.random()
-        quizInterval  = quizIsTarget
+        quizIsTarget = Bool.random()
+        quizInterval = quizIsTarget
             ? focusInterval
             : (activeIntervals.filter { $0 != focusInterval }.randomElement() ?? focusInterval)
-        quizRootHz    = randomRootHz()
-        phase         = .playingQuiz
+        quizRootHz = randomRootHz()
+        phase = .playingQuiz
 
         let root = quizRootHz
         let quiz = quizInterval
@@ -184,7 +239,6 @@ public final class IdentificationViewModel: ObservableObject {
         }
     }
 
-    /// Random root in a comfortable vocal/guitar range (C3–G4).
     private func randomRootHz() -> Float {
         let midi = Int.random(in: 48...67)
         return Float(440.0 * pow(2.0, Double(midi - 69) / 12.0))

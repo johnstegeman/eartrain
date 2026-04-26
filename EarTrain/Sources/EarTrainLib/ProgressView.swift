@@ -18,6 +18,7 @@ public struct ProgressView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 summaryBar
+                if !store.allStreakRecords.isEmpty { streakSection }
                 if store.hasContourData { contourSection }
                 heatmap
             }
@@ -54,6 +55,50 @@ public struct ProgressView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(EarTrainColors.bg)
+    }
+
+    // MARK: - Streak records section
+
+    private var streakSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("BEST STREAKS")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.8)
+                .foregroundColor(EarTrainColors.textSecondary)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220))], spacing: 8) {
+                ForEach(store.allStreakRecords) { record in
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(record.modeLabel)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(EarTrainColors.textPrimary)
+                                .fixedSize()
+                            HStack(spacing: 6) {
+                                DifficultyDots(level: record.difficulty)
+                                Text("Level \(record.difficulty)")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(EarTrainColors.textSecondary)
+                                    .fixedSize()
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        HStack(alignment: .lastTextBaseline, spacing: 4) {
+                            Text("\(record.streak)")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(EarTrainColors.accent)
+                            Text("in a row")
+                                .font(.system(size: 10))
+                                .foregroundColor(EarTrainColors.textSecondary)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(EarTrainColors.surface)
+                    .cornerRadius(10)
+                }
+            }
+        }
     }
 
     // MARK: - Contour section

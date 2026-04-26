@@ -4,22 +4,28 @@ import SwiftUI
 public struct SettingsView: View {
 
     @ObservedObject var audio: AudioEngineManager
+    @ObservedObject var store: ProgressStore
     @AppStorage(GuitarTimbre.defaultsKey) private var timbreRaw: String = GuitarTimbre.sine.rawValue
 
     @State private var inputDevices:  [AudioDevice] = []
     @State private var outputDevices: [AudioDevice] = []
+    @State private var showClearStreaksConfirm = false
 
     private var selectedTimbre: GuitarTimbre {
         GuitarTimbre(rawValue: timbreRaw) ?? .sine
     }
 
-    public init(audio: AudioEngineManager) { self.audio = audio }
+    public init(audio: AudioEngineManager, store: ProgressStore) {
+        self.audio = audio
+        self.store = store
+    }
 
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 deviceSection
                 toneSection
+                dataSection
             }
             .padding(32)
         }
@@ -111,6 +117,46 @@ public struct SettingsView: View {
                     )
                 }
             }
+        }
+    }
+
+    // MARK: - Data section
+
+    private var dataSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader("Data")
+
+            VStack(spacing: 0) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Clear streak records")
+                            .font(.system(size: 14))
+                            .foregroundColor(EarTrainColors.textPrimary)
+                        Text("Removes all personal-best streak data")
+                            .font(.system(size: 11))
+                            .foregroundColor(EarTrainColors.textSecondary)
+                    }
+                    Spacer()
+                    Button("Clear") {
+                        showClearStreaksConfirm = true
+                    }
+                    .foregroundColor(.red)
+                    .confirmationDialog("Clear all streak records?",
+                                        isPresented: $showClearStreaksConfirm,
+                                        titleVisibility: .visible) {
+                        Button("Clear Records", role: .destructive) {
+                            store.clearAllStreakRecords()
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("This can't be undone.")
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .background(EarTrainColors.surface)
+            .cornerRadius(8)
         }
     }
 

@@ -91,8 +91,6 @@ public final class AudioEngineManager: ObservableObject {
     private var engine: AVAudioEngine?
     private var detector: PitchDetector?
     private var configChangeObserver: NSObjectProtocol?
-    /// Saved at start() time so enableMicTap() can reinstall with the same format.
-    private var savedInputFormat: AVAudioFormat?
     private var micTapInstalled = false
 
     /// Tap buffer size — 4096 samples ≈ 93 ms at 44100 Hz.
@@ -106,38 +104,27 @@ public final class AudioEngineManager: ObservableObject {
         guard !isRunning else { return }
 
         let eng = AVAudioEngine()
-        let inputNode = eng.inputNode
-        let inputFormat = inputNode.inputFormat(forBus: 0)
 
-        guard inputFormat.sampleRate > 0 else {
-            engineError = "No audio input device found. Check your mic or interface in System Settings."
-            return
-        }
+        // Use the output node's sample rate for tone players.
+        // We deliberately do NOT touch eng.inputNode here — accessing it claims
+        // the microphone even without a tap, turning on the orange indicator.
+        // All input-node work is deferred to enableMicTap().
+        let outputRate = eng.outputNode.outputFormat(forBus: 0).sampleRate
+        let sampleRate = Float(outputRate > 0 ? outputRate : 44100)
 
-        let sampleRate = Float(inputFormat.sampleRate)
-        let det = PitchDetector(sampleRate: sampleRate)
-
-        // Save format for enableMicTap() — tap not installed yet.
-        // The mic tap is only active while a guitar-response exercise is running,
-        // so the macOS microphone-in-use indicator stays off otherwise.
-        savedInputFormat = inputFormat
-
-        // --- Interval tone output (must attach before engine.start()) ---
+        // --- Tone output (must attach before engine.start()) ---
         intervalPlayer.attach(to: eng, sampleRate: sampleRate)
         samplePlayer.attach(to: eng)
 
-        // --- Apply preferred devices before start ---
+        // --- Apply preferred output device before start ---
         if let dev = AudioDeviceList.device(forUID: preferredOutputUID) {
             applyDevice(dev.id, to: eng.outputNode)
         }
-        if let dev = AudioDeviceList.device(forUID: preferredInputUID) {
-            applyDevice(dev.id, to: eng.inputNode)
-        }
+        // Preferred input device is applied lazily in enableMicTap().
 
         do {
             try eng.start()
             self.engine = eng
-            self.detector = det
             isRunning = true
             eng.mainMixerNode.outputVolume = outputVolume
             // Load samples for the current timbre (no-op for .sine).
@@ -161,15 +148,32 @@ public final class AudioEngineManager: ObservableObject {
     // MARK: - Mic tap control
 
     /// Install the hardware mic tap and begin pitch detection.
-    /// The tap is NOT active by default — only install it while a
+    /// The tap is NOT active by default — only call this while a
     /// guitar-response exercise is running so the macOS orange dot disappears
-    /// when the user is on other tabs.
+    /// when the user is on other tabs or in contour/identification mode.
+    ///
+    /// This is also the first point we touch `inputNode`, so the mic is never
+    /// claimed until an exercise that actually needs it is active.
     public func enableMicTap() {
-        guard let eng = engine,
-              let format = savedInputFormat,
-              let det = detector,
-              !micTapInstalled else { return }
-        eng.inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: format) { [weak self] buffer, _ in
+        guard let eng = engine, !micTapInstalled else { return }
+
+        // Apply preferred input device now (deferred from start()).
+        if let dev = AudioDeviceList.device(forUID: preferredInputUID) {
+            applyDevice(dev.id, to: eng.inputNode)
+        }
+
+        let inputNode = eng.inputNode
+        let format = inputNode.inputFormat(forBus: 0)
+        guard format.sampleRate > 0 else {
+            engineError = "No audio input device found. Check your mic in System Settings."
+            return
+        }
+
+        // Create or recreate detector (sample rate can change on device switch).
+        let det = PitchDetector(sampleRate: Float(format.sampleRate))
+        self.detector = det
+
+        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: format) { [weak self] buffer, _ in
             guard let self else { return }
             var rms: Float = 0
             if let data = buffer.floatChannelData {
@@ -279,7 +283,6 @@ public final class AudioEngineManager: ObservableObject {
         engine?.stop()
         engine = nil
         detector = nil
-        savedInputFormat = nil
         isRunning = false
         amplitude    = 0
         detectedHz   = 0
