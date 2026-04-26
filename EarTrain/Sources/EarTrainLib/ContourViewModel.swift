@@ -74,6 +74,7 @@ public final class ContourViewModel: ObservableObject {
     private var correctContour: Contour = .higher
     private var rootHz: Float = 440
     private var secondHz: Float = 660
+    private var semitones: Int = 7
     private var currentTask: Task<Void, Never>?
     private var logger: SessionLogger?
 
@@ -101,9 +102,10 @@ public final class ContourViewModel: ObservableObject {
     public func startExercise() {
         currentTask?.cancel()
         phase = .playing
-        let (root, second, contour) = generatePair()
+        let (root, second, st, contour) = generatePair()
         rootHz = root
         secondHz = second
+        semitones = st
         correctContour = contour
 
         currentTask = Task {
@@ -136,7 +138,8 @@ public final class ContourViewModel: ObservableObject {
         totalTrials += 1
         if correct { correctTrials += 1 }
         phase = .result(correct: correct, correctAnswer: correctContour)
-        logger?.logContourTrial(direction: correctContour.directionKey, correct: correct)
+        logger?.logContourTrial(rootHz: rootHz, semitones: semitones,
+                                direction: correctContour.directionKey, correct: correct)
 
         currentTask = Task {
             let delay: TimeInterval = correct ? 1.5 : 3.0
@@ -148,13 +151,13 @@ public final class ContourViewModel: ObservableObject {
 
     // MARK: - Generation
 
-    /// Returns (rootHz, secondHz, contour).
+    /// Returns (rootHz, secondHz, semitones, contour).
     ///
     /// Contour and semitone count are chosen first so the root MIDI range can be
     /// constrained to keep BOTH notes within the guitar sample set (MIDI 40–81).
     /// Without this, a `.lower` pair from a low root would request a buffer index
     /// below 40, which SamplePlayer doesn't have — producing silence for note 2.
-    private func generatePair() -> (Float, Float, Contour) {
+    private func generatePair() -> (Float, Float, Int, Contour) {
         // Weights: same is less common (20%) to keep the exercise challenging.
         let roll = Int.random(in: 0..<10)
         let contour: Contour
@@ -182,7 +185,7 @@ public final class ContourViewModel: ObservableObject {
         case .same:   secondHz = rootHz
         }
 
-        return (rootHz, secondHz, contour)
+        return (rootHz, secondHz, semitones, contour)
     }
 
     private func midiToHz(_ midi: Int) -> Float {

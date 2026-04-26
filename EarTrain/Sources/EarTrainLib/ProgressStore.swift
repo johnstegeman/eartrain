@@ -40,15 +40,32 @@ public final class ProgressStore: ObservableObject {
         return counts
     }
 
-    /// Counts for a specific contour direction. Nil if no data yet.
-    public func contourCounts(for direction: String) -> SessionLogger.ContourCounts? {
-        guard let counts = stats.contour[direction], counts.total > 0 else { return nil }
+    /// Aggregated contour counts for a specific interval across all registers.
+    /// Returns nil if no trials exist for that interval.
+    public func contourCounts(for intervalName: String) -> SessionLogger.ContourCounts? {
+        guard let byRegister = stats.contour[intervalName] else { return nil }
+        var total = SessionLogger.ContourCounts()
+        for c in byRegister.values { total.correct += c.correct; total.total += c.total }
+        return total.total > 0 ? total : nil
+    }
+
+    /// Contour counts for a specific interval × register cell.
+    public func contourCounts(for intervalName: String,
+                              register: Register) -> SessionLogger.ContourCounts? {
+        guard let counts = stats.contour[intervalName]?[register.rawValue],
+              counts.total > 0 else { return nil }
         return counts
+    }
+
+    /// Interval names that have at least one contour trial, sorted by shortName.
+    public var contourIntervals: [String] {
+        stats.contour.filter { $0.value.values.contains { $0.total > 0 } }
+                     .keys.sorted()
     }
 
     /// True if any contour trials have been logged.
     public var hasContourData: Bool {
-        stats.contour.values.contains { $0.total > 0 }
+        stats.contour.values.contains { $0.values.contains { $0.total > 0 } }
     }
 
     /// Overall accuracy across all interval trials (playback + identification).

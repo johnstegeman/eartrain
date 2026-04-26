@@ -59,8 +59,10 @@ public final class SessionLogger {
         /// Interval confusion matrix (playback + identification):
         /// matrix[interval.shortName][register.rawValue] → counts
         public var matrix: [String: [String: RegisterCounts]] = [:]
-        /// Contour accuracy: ["higher"|"lower"|"same"] → counts
-        public var contour: [String: ContourCounts] = [:]
+        /// Contour accuracy: contour[intervalName][register.rawValue] → counts
+        /// intervalName uses the same shortName convention as Interval (e.g. "m3", "P5").
+        /// Semitones without a named interval use "TT", "m6", "M7" etc.
+        public var contour: [String: [String: ContourCounts]] = [:]
     }
 
     // MARK: - State
@@ -143,17 +145,42 @@ public final class SessionLogger {
     }
 
     /// Log one contour trial (higher / lower / same).
-    public func logContourTrial(direction: String, correct: Bool) {
+    ///
+    /// Records the actual interval (by semitone count) and register so the
+    /// data can drive adaptive difficulty: "user struggles with m2 in low register."
+    public func logContourTrial(rootHz: Float, semitones: Int,
+                                direction: String, correct: Bool) {
+        let reg = buckets.register(for: rootHz)
         let trial = TrialRecord(
             timestamp:    Date(),
             exerciseType: "contour",
-            interval:     direction,   // "higher" | "lower" | "same"
-            register:     "",
-            rootHz:       0,
+            interval:     Self.intervalName(forSemitones: semitones),
+            register:     reg.rawValue,
+            rootHz:       rootHz,
             detectedHz:   0,
             result:       correct ? "correct" : "wrong"
         )
         session.trials.append(trial)
+    }
+
+    /// Human-readable interval name for a raw semitone count.
+    /// Covers the full chromatic scale so contour exercises with any gap are labelled correctly.
+    public static func intervalName(forSemitones n: Int) -> String {
+        switch n {
+        case 1:  return "m2"
+        case 2:  return "M2"
+        case 3:  return "m3"
+        case 4:  return "M3"
+        case 5:  return "P4"
+        case 6:  return "TT"
+        case 7:  return "P5"
+        case 8:  return "m6"
+        case 9:  return "M6"
+        case 10: return "m7"
+        case 11: return "M7"
+        case 12: return "P8"
+        default: return "\(n)st"
+        }
     }
 
     public func endSession() {
@@ -197,10 +224,12 @@ public final class SessionLogger {
             switch trial.exerciseType ?? "playback" {
 
             case "contour":
-                var counts = stats.contour[trial.interval] ?? ContourCounts()
+                var byRegister = stats.contour[trial.interval] ?? [:]
+                var counts     = byRegister[trial.register]   ?? ContourCounts()
                 counts.total += 1
                 if trial.result == "correct" { counts.correct += 1 }
-                stats.contour[trial.interval] = counts
+                byRegister[trial.register]      = counts
+                stats.contour[trial.interval]   = byRegister
 
             default:  // "playback" and "identification" share the interval matrix
                 var byRegister = stats.matrix[trial.interval] ?? [:]
