@@ -58,8 +58,6 @@ public struct ProgressView: View {
 
     // MARK: - Contour section
 
-    private static let contourDirections = ["higher", "lower", "same"]
-
     private var contourSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Contour")
@@ -68,10 +66,8 @@ public struct ProgressView: View {
                 .foregroundColor(EarTrainColors.textSecondary)
                 .textCase(.uppercase)
 
-            HStack(spacing: 8) {
-                ForEach(Self.contourDirections, id: \.self) { dir in
-                    contourCell(direction: dir)
-                }
+            ForEach(store.contourIntervals, id: \.self) { name in
+                contourIntervalRow(name)
             }
         }
         .padding(16)
@@ -79,58 +75,70 @@ public struct ProgressView: View {
         .cornerRadius(12)
     }
 
-    private func contourCell(direction: String) -> some View {
-        let counts  = store.contourCounts(for: direction)
+    private func contourIntervalRow(_ intervalName: String) -> some View {
+        let counts  = store.contourCounts(for: intervalName)
         let hasData = (counts?.total ?? 0) >= 5
-        let icon    = direction == "higher" ? "arrow.up"
-                    : direction == "lower"  ? "arrow.down"
-                    : "equal"
 
-        return VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 14))
-                .foregroundColor(contourFg(counts: counts, hasData: hasData))
-            Text(direction.capitalized)
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(0.3)
-                .foregroundColor(contourFg(counts: counts, hasData: hasData))
+        return HStack(spacing: 12) {
+            Text(intervalName)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(EarTrainColors.textPrimary)
+                .frame(width: 36, alignment: .leading)
+
             if hasData, let c = counts {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(EarTrainColors.bg)
+                            .frame(height: 8)
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(accuracyColor(c.accuracy))
+                            .frame(width: geo.size.width * CGFloat(c.accuracy), height: 8)
+                    }
+                }
+                .frame(height: 8)
+
                 Text("\(Int(c.accuracy * 100))%")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.black.opacity(0.8))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(accuracyColor(c.accuracy))
+                    .frame(width: 36, alignment: .trailing)
+
                 Text("\(c.total)")
-                    .font(.system(size: 9))
-                    .foregroundColor(.black.opacity(0.5))
+                    .font(.system(size: 11))
+                    .foregroundColor(EarTrainColors.textDisabled)
+                    .frame(width: 28, alignment: .trailing)
+
             } else if let c = counts, c.total > 0 {
-                Text("\(c.total)")
-                    .font(.system(size: 14))
-                    .foregroundColor(EarTrainColors.textDisabled)
+                // Has data but < 5 trials — show trial count, muted
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(EarTrainColors.bg)
+                            .frame(height: 8)
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(EarTrainColors.textDisabled)
+                            .frame(width: geo.size.width * CGFloat(c.accuracy), height: 8)
+                    }
+                }
+                .frame(height: 8)
+
                 Text("few")
-                    .font(.system(size: 9))
+                    .font(.system(size: 11))
                     .foregroundColor(EarTrainColors.textDisabled)
+                    .frame(width: 36, alignment: .trailing)
+
+                Text("\(c.total)")
+                    .font(.system(size: 11))
+                    .foregroundColor(EarTrainColors.textDisabled)
+                    .frame(width: 28, alignment: .trailing)
             } else {
+                Spacer()
                 Text("—")
-                    .font(.system(size: 18))
+                    .font(.system(size: 13))
                     .foregroundColor(EarTrainColors.textDisabled)
             }
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 80)
-        .background(contourBg(counts: counts, hasData: hasData))
-        .cornerRadius(8)
-    }
-
-    private func contourBg(counts: SessionLogger.ContourCounts?, hasData: Bool) -> Color {
-        guard let c = counts, hasData else { return EarTrainColors.surface.opacity(0.6) }
-        return accuracyColor(c.accuracy).opacity(0.85)
-    }
-
-    private func contourFg(counts: SessionLogger.ContourCounts?, hasData: Bool) -> Color {
-        guard let c = counts, hasData else { return EarTrainColors.textSecondary }
-        let acc = c.accuracy
-        // Coloured background is always fairly saturated; use black for contrast.
-        if acc >= 0.50 { return .black.opacity(0.7) }
-        return EarTrainColors.textPrimary
+        .padding(.vertical, 4)
     }
 
     // MARK: - Summary bar
