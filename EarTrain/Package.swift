@@ -39,7 +39,7 @@ let package = Package(
                 .product(name: "AudioKit", package: "AudioKit"),
             ],
             path: "Sources/EarTrainLib",
-            resources: [.copy("Samples"), .copy("Samples_normalized")]
+            resources: [.copy("Samples"), .copy("Samples_normalized"), .process("audie.png"), .copy("Audie.icns")]
         ),
 
         // Tests

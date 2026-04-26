@@ -28,7 +28,7 @@ Insider musical puns (solfège, etc.) ruled out; needs to be self-evident.
 **Decision: Audie** — no existing App Store apps with this exact name, direct
 audio/hearing connection, sounds like a friendly real person. ✓
 
-### Onboarding — ask for a name `planned`
+### Onboarding — ask for a name `next`
 
 On first launch (after mic permission): a single friendly screen.
 - "Hi! I'm [App Name]. What should I call you?" — text field, placeholder "Your name or nickname"
@@ -36,7 +36,7 @@ On first launch (after mic permission): a single friendly screen.
 - Never required — "Skip" option defaults to no personalisation
 - Can be changed in Settings
 
-### Companion feedback system `planned`
+### Companion feedback system `next`
 
 The app speaks in first person as [App Name]. Feedback is contextual — not every trial,
 only at meaningful moments. Rules:
@@ -164,33 +164,39 @@ ProgressView shows interval × register heatmap (green→red) with per-cell dril
 Cells with < 5 trials shown muted. Session-by-session accuracy trend line.
 Persist to `~/Library/Application Support/EarTrain/sessions/` + `cumulative.json`.
 
-### 1.4 — HomeView + Session Start Sheet `planned`
+### 1.4 — HomeView + Session Start Sheet `done`
 HomeView: quick stats, Start Session CTA, Drill My Misses shortcut (greyed until
 5 trials/bucket).
 Session Start Sheet: duration grid (5/10/20/30/custom min), mode toggle
 (Standard / Drill My Misses), settings summary row.
 
-### 1.5 — End of Session screen `planned`
+### 1.5 — End of Session screen `done`
 Stats grid: accuracy this session / delta vs. previous / cumulative time.
 Top 2–3 confusion buckets surfaced. "View Progress" / "Start Another Session" CTAs.
 12-hour milestone banner when cumulative time crosses threshold.
 
-### 1.6 — Settings expansion `planned`
+### 1.6 — Session timer enforcement `next`
+
+Wire up the duration picker to actually end the session. Timer starts at `beginSession()`,
+fires `endSession()` (shows EndOfSessionView) when time elapses.
+Show remaining time in the exercise header bar.
+
+### 1.7 — Settings expansion `planned`
 Root note, active interval set, register range, input device selector,
 CI keep-alive toggle (on by default), fretboard hint level, pitch tolerance,
 audio buffer size (Advanced), feedback delay (correct: 2s, wrong: 4s).
 
-### 1.7 — Drill My Misses `planned`
+### 1.8 — Drill My Misses `planned`
 Reads `cumulative.json`. Eligibility: ≥ 5 trials, error rate > 30%.
 Ranks (interval, register) buckets by error rate. Generates a weighted session.
 Available from HomeView and Session Start Sheet.
 
-### 1.8 — TunerView `planned`
+### 1.9 — TunerView `planned`
 Chromatic tuner. Detected note name, Hz readout, cents deviation needle (±50 cents).
 Green ≤ ±10 cents, amber ≤ ±25 cents, red > ±25 cents.
 Nav order: Tune → Practice → Progress → Settings.
 
-### 1.9 — Onboarding assessment `planned`
+### 1.10 — Onboarding assessment `planned`
 ~48-question calibration. Listening-only mode. Covers 8 intervals × 3 registers.
 Progressive difficulty: maximally different intervals first (P8 vs M2), narrowing
 toward similar pairs (m3 vs M3). Seeds confusion matrix before first drill session.
@@ -225,6 +231,22 @@ steps back down.
 **Wiring:** `LessonRunner` reads difficulty level from `ProgressStore` when configuring
 each step's parameters. Free-play interval trainer also adapts: after 3 consecutive correct
 in a bucket, the next trial in that bucket gets narrower tolerance.
+
+### 2.0.1 — Configurable trial-sampling strategies `planned`
+
+Today ContourViewModel uses a "soft register rotation" (weighted toward least-seen register bucket).
+The lesson planner should make the sampling strategy a first-class concept so different lesson plans
+can specify different policies:
+
+| Strategy | Description |
+|----------|-------------|
+| `uniform` | Pure random — simplest, no coverage guarantee |
+| `rotate` | Weighted toward least-seen bucket (current contour impl) |
+| `drill(buckets:)` | Repeat only specific buckets — for targeted weak-area drilling |
+| `spaced` | Repeat missed items more often (SM-2-style) |
+
+The strategy should be injectable so CompanionEngine (or a future LessonRunner) can swap it at runtime
+(e.g., when "My Weak Areas" mode is active).
 
 ### 2.1 — LessonRunner + ExercisePrimitive protocol `planned`
 Extract lesson orchestration from freeplay tab. LessonRunner holds all ViewModels,
@@ -292,12 +314,62 @@ Surface from audiologist view's Export button.
 
 ## Phase 4 — Future Ideas
 
+- **ML-driven drill selection** — Use machine learning to decide what to drill the user on, rather than hand-coded heuristics. Possible angles:
+  - **Knowledge tracing** (e.g. Deep Knowledge Tracing / BKT): model the probability that a user "knows" each skill (register × interval) and select the next trial to maximally reduce uncertainty
+  - **Spaced repetition with learned forgetting curves**: instead of fixed SM-2 intervals, fit a per-user forgetting curve from trial history
+  - **Bandit algorithms** (e.g. Thompson Sampling): treat each register × difficulty bucket as an arm; exploit high-accuracy buckets less, explore weak ones more — balances coverage with efficient use of session time
+  - **On-device Core ML**: Apple's Core ML + Create ML could make this feasible without a server; trial history is already being logged in a structured format
+  - Open question: is the dataset per user ever large enough to fit a meaningful model? Might need a shared prior from aggregate anonymised data across users.
+  - Research to investigate: Sebastian Leitner (flashcard spacing), Corbett & Anderson (BKT), Reddy et al. (bandits for education)
+
 - Blues lick practice (curated lick library + echo loop)
 - Improv feedback over backing track (in-key vs. out-of-key detection)
 - Adaptive per-user loudness calibration (extension of Phase 0.1 normalization baseline)
 - CI processor-specific customization (Cochlear / MED-EL / Advanced Bionics)
 - Light mode UI
 - Mac App Store distribution
+
+---
+
+## Audie Personality Modes `future`
+
+Today Audie has a single personality — warm, real, slightly casual, like a good private tutor.
+A future phase adds selectable **personality skins** that change tone without changing content:
+same events fire (streaks, struggle, PB, difficulty offer), just with a different voice.
+
+### Proposed personalities
+
+| ID | Name | Tone | Sample streak message | Sample struggle message |
+|----|------|------|-----------------------|-------------------------|
+| `default` | **Audie** (current) | Warm, encouraging, honest | "Five in a row. That's real progress." | "These can be tough. Don't get discouraged." |
+| `taskmaster` | **The Taskmaster** | Demanding, no-nonsense, high standards | "Five. You should've gotten ten. Keep going." | "That's not good enough. Again." |
+| `hippie` | **The Hippie** | Laid-back, groovy, cosmic | "Five in a row, dude. The universe is with you." | "Hey, it's all just vibrations, man. Float through it." |
+| `coach` | **The Coach** | Sports-energy, punchy, motivational | "Five straight! You're in the zone right now!" | "Shake it off. Next one is yours." |
+| `professor` | **The Professor** | Dry, scholarly, precise | "Five consecutive correct responses. Statistically significant." | "The data suggests this interval class warrants further study." |
+| `cheerleader` | **The Cheerleader** | Over-the-top enthusiastic, exclamation points | "FIVE IN A ROW?! YOU ARE AMAZING!!" | "Okay okay okay, you've totally got this, I believe in you SO much!!" |
+
+### Implementation sketch
+
+```
+enum AudiePersonality: String, CaseIterable {
+    case `default`, taskmaster, hippie, coach, professor, cheerleader
+}
+```
+
+- `FeedbackCopy` gains a second dimension: `static func streak(personality: AudiePersonality) -> [String]`
+- `CompanionEngine` gains `@Published var personality: AudiePersonality` (persisted to UserDefaults)
+- Settings screen gains a personality picker (grid of names or a segmented picker)
+- Each `pick()` call passes the current personality → different pool
+
+**Content rule**: every personality must cover all event categories (streak, struggle, PB, difficulty offer/confirm, session start, welcome back). Missing coverage falls back to `.default`.
+
+### "My Weak Areas" range filter `future`
+
+A fifth option for the per-exercise range selector. Proposal:
+- Uses `ProgressStore.topConfusionBuckets()` (≥5 trials, highest error rate) to identify the register + interval combos the user misses most
+- Translates those buckets back into the relevant semitone ranges / note sets for each exercise type
+- Falls back to "All" if fewer than 20 total trials exist (not enough data to be meaningful)
+- Shows a small indicator ("🎯 Weak areas mode") in the exercise header when active
 
 ---
 

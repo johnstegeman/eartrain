@@ -1,21 +1,22 @@
 import SwiftUI
 
-/// Active interval-training exercise screen.
-/// Wired to ExerciseViewModel for state; AudioEngineManager is owned by the parent.
+/// Active interval-training exercise screen (guitar playback mode).
 public struct ExerciseView: View {
     @ObservedObject var vm: ExerciseViewModel
     @ObservedObject var store: ProgressStore
     @ObservedObject var audio: AudioEngineManager
+    @ObservedObject var companion: CompanionEngine
     @Binding var activeMode: AppMode
-
     @Binding var selectedDuration: SessionDuration
     @State private var sessionSummary: SessionEndSummary? = nil
 
     public init(vm: ExerciseViewModel, store: ProgressStore, audio: AudioEngineManager,
-                activeMode: Binding<AppMode>, selectedDuration: Binding<SessionDuration>) {
+                companion: CompanionEngine, activeMode: Binding<AppMode>,
+                selectedDuration: Binding<SessionDuration>) {
         self.vm = vm
         self.store = store
         self.audio = audio
+        self.companion = companion
         self._activeMode = activeMode
         self._selectedDuration = selectedDuration
     }
@@ -25,7 +26,8 @@ public struct ExerciseView: View {
             if vm.phase == .idle {
                 ExerciseReadyView(mode: .intervals, selectedDuration: $selectedDuration,
                                   volume: $audio.outputVolume) {
-                    vm.beginSession()
+                    companion.sessionStarted()
+                    vm.beginSession(duration: selectedDuration)
                     vm.startExercise()
                 }
             } else {
@@ -37,10 +39,29 @@ public struct ExerciseView: View {
                         controls
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    AudieChatPanel(companion: companion)
                 }
             }
         }
-        .onDisappear { vm.cancel() }
+        .onAppear {
+            companion.difficultyDelegate = vm
+            vm.onTrialResult = { [weak companion, weak store, weak vm] correct in
+                companion?.recordOutcome(correct: correct)
+                guard let companion, let store, let vm else { return }
+                let isNewBest = store.updateStreakIfRecord(modeKey: "intervals",
+                                                          difficulty: vm.difficultyLevel,
+                                                          streak: companion.currentStreak)
+                if isNewBest { companion.announcePersonalBest(streak: companion.currentStreak) }
+            }
+        }
+        .onDisappear {
+            if companion.difficultyDelegate === vm { companion.difficultyDelegate = nil }
+            vm.onTrialResult = nil
+            vm.cancel()
+        }
+        .onChange(of: vm.sessionExpired) { expired in
+            if expired { endSession() }
+        }
         .sheet(item: $sessionSummary) { summary in
             EndOfSessionView(summary: summary, store: store, activeMode: $activeMode)
         }
@@ -50,6 +71,17 @@ public struct ExerciseView: View {
         HStack {
             VolumeSlider(volume: $audio.outputVolume)
             Spacer()
+            DifficultyControl(level: vm.difficultyLevel,
+                              descriptions: vm.difficultyDescriptions) { level in
+                vm.difficultyLevel = level
+            }
+            .padding(.trailing, 6)
+            if let secs = vm.timeRemainingSeconds {
+                Text(formatTime(secs))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(secs < 60 ? EarTrainColors.error : EarTrainColors.textDisabled)
+                    .padding(.trailing, 8)
+            }
             Button("End Session") { endSession() }
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(EarTrainColors.textDisabled)
@@ -103,7 +135,6 @@ public struct ExerciseView: View {
             switch vm.phase {
             case .idle:
                 statusText("Ready", color: EarTrainColors.textSecondary)
-
             case .playing:
                 HStack(spacing: 8) {
                     Image(systemName: "speaker.wave.2.fill")
@@ -111,7 +142,6 @@ public struct ExerciseView: View {
                 }
                 .foregroundColor(EarTrainColors.accent)
                 .font(.system(size: 16, weight: .semibold))
-
             case .awaitingRoot:
                 HStack(spacing: 8) {
                     Image(systemName: "mic.fill")
@@ -119,7 +149,6 @@ public struct ExerciseView: View {
                 }
                 .foregroundColor(EarTrainColors.textPrimary)
                 .font(.system(size: 16, weight: .semibold))
-
             case .awaitingInterval:
                 HStack(spacing: 8) {
                     Image(systemName: "mic.fill")
@@ -127,10 +156,8 @@ public struct ExerciseView: View {
                 }
                 .foregroundColor(EarTrainColors.accent)
                 .font(.system(size: 16, weight: .semibold))
-
             case .result(let result):
                 resultBadge(result)
-
             case .noRead:
                 VStack(spacing: 8) {
                     Text("Couldn't detect pitch")
@@ -236,8 +263,14 @@ public struct ExerciseView: View {
         case .wrong:              return EarTrainColors.error
         }
     }
+
+    private func formatTime(_ seconds: Int) -> String {
+        let m = seconds / 60
+        let s = seconds % 60
+        return String(format: "%d:%02d", m, s)
+    }
 }
 
 private extension EarTrainColors {
-    static let warning = Color(hex: "#f5a623")   // same as accent per design system
+    static let warning = Color(hex: "#f5a623")
 }

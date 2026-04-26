@@ -1,5 +1,22 @@
 import Foundation
 
+/// A single all-time personal-best streak record.
+public struct StreakRecord: Identifiable {
+    public var id: String { "\(modeKey)_\(difficulty)" }
+    public let modeKey: String
+    public let difficulty: Int
+    public let streak: Int
+
+    public var modeLabel: String {
+        switch modeKey {
+        case "contour":        return "Contour"
+        case "intervals":      return "Intervals"
+        case "identification": return "Identification"
+        default:               return modeKey.capitalized
+        }
+    }
+}
+
 /// Reads cumulative session data from disk and provides it to ProgressView.
 ///
 /// Call `reload()` on appear — no polling needed since sessions write synchronously
@@ -106,6 +123,57 @@ public final class ProgressStore: ObservableObject {
         }
         guard total > 0 else { return nil }
         return Double(totalCorrect) / Double(total)
+    }
+
+    // MARK: - Streak records (UserDefaults-backed, keyed by "modeKey_difficulty")
+
+    /// Returns the all-time best consecutive-correct streak for a given mode + difficulty.
+    public func longestStreak(modeKey: String, difficulty: Int) -> Int {
+        UserDefaults.standard.integer(forKey: streakKey(modeKey, difficulty))
+    }
+
+    /// Persists `streak` only if it beats the existing record for that mode + difficulty.
+    /// Returns `true` if a new personal best was set.
+    /// Safe to call on every trial — no-ops when streak ≤ current record.
+    @discardableResult
+    public func updateStreakIfRecord(modeKey: String, difficulty: Int, streak: Int) -> Bool {
+        guard streak > 0 else { return false }
+        let key = streakKey(modeKey, difficulty)
+        let current = UserDefaults.standard.integer(forKey: key)
+        guard streak > current else { return false }
+        UserDefaults.standard.set(streak, forKey: key)
+        objectWillChange.send()
+        return true
+    }
+
+    /// All recorded personal-best streaks, sorted by streak count descending.
+    public var allStreakRecords: [StreakRecord] {
+        let prefix = "longestStreak_"
+        let defaults = UserDefaults.standard.dictionaryRepresentation()
+        return defaults.compactMap { key, value -> StreakRecord? in
+            guard key.hasPrefix(prefix),
+                  let count = value as? Int, count > 0 else { return nil }
+            let rest = String(key.dropFirst(prefix.count))
+            // key format: modeKey_difficulty  (difficulty is always a single digit 1-5)
+            guard let lastUnderscore = rest.lastIndex(of: "_"),
+                  let difficulty = Int(rest[rest.index(after: lastUnderscore)...]) else { return nil }
+            let modeKey = String(rest[..<lastUnderscore])
+            return StreakRecord(modeKey: modeKey, difficulty: difficulty, streak: count)
+        }.sorted { $0.streak > $1.streak }
+    }
+
+    /// Removes all personal-best streak records from UserDefaults.
+    public func clearAllStreakRecords() {
+        let prefix = "longestStreak_"
+        let defaults = UserDefaults.standard
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(prefix) {
+            defaults.removeObject(forKey: key)
+        }
+        objectWillChange.send()
+    }
+
+    private func streakKey(_ modeKey: String, _ difficulty: Int) -> String {
+        "longestStreak_\(modeKey)_\(difficulty)"
     }
 
     // MARK: - Private

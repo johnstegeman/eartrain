@@ -1,80 +1,132 @@
 import AVFoundation
 import SwiftUI
 
-/// Drives a single interval-training session.
+/// Drives a single interval-training session (guitar playback mode).
 ///
 /// State machine:
 ///   idle → playing → awaitingRoot → awaitingInterval → result → (next) playing …
-///   Any state → noRead (8 s timeout) → user can replay
+///   Any state → noRead (timeout) → user can replay
 ///
-/// Two-note detection: the app listens for the root note first, then the
-/// interval note. The interval is graded from the relationship between the
-/// two detected pitches — not from the Settings root — so the exercise works
-/// from any starting note the user chooses.
+/// Two-note detection: the app listens for the root first, then the interval.
+/// The interval is graded from the two detected pitches — not the Settings root —
+/// so the exercise works from any starting note the user chooses.
 @MainActor
-public final class ExerciseViewModel: ObservableObject {
+public final class ExerciseViewModel: ObservableObject, DifficultyAdjustable {
 
     // MARK: - Phase
 
     public enum Phase: Equatable {
         case idle
         case playing
-        case awaitingRoot       // waiting for user to play first note
-        case awaitingInterval   // root detected, waiting for interval note
+        case awaitingRoot
+        case awaitingInterval
         case result(ExerciseResult)
-        case noRead             // couldn't detect pitch — prompt to replay
+        case noRead
     }
 
     // MARK: - Published
 
     @Published public var phase: Phase = .idle
     @Published public var currentInterval: Interval = .m3
-    @Published public var rootHz: Float = 440.0   // A4 default; used for playback only
+    @Published public var rootHz: Float = 440.0
     @Published public var totalTrials: Int = 0
     @Published public var correctTrials: Int = 0
 
+    /// 1 = easiest (.close counts as .correct, loose detection), 5 = hardest (tight).
+    @Published public var difficultyLevel: Int = 3
+
+    @Published public var timeRemainingSeconds: Int? = nil
+    @Published public var sessionExpired: Bool = false
+
     // MARK: - Settings
 
-    /// Active interval set — defaults to priority drill set from DESIGN.md.
     public var activeIntervals: [Interval] = [.m3, .M3, .P5, .P8]
 
-    // MARK: - Audio (injected — owned by AppSession)
+    // MARK: - Audio
 
     private let audio: any AudioPlaying & MicListening
+
+    // MARK: - Difficulty
+
+    /// At levels 1-2, widen the "correct" band by treating close as correct.
+    private var promoteCloseToCorrect: Bool { difficultyLevel <= 2 }
+
+    /// Pitch stability window in cents; looser at easy levels.
+    private var stabilityCents: Float {
+        difficultyLevel == 1 ? 40 : 25
+    }
+
+    /// Human-readable description for each difficulty level (1–5).
+    public var difficultyDescriptions: [String] {
+        [
+            "Wide tolerance — close counts as correct",
+            "Easy — some tolerance for pitch",
+            "Standard grading",
+            "Precise — must be close",
+            "Exact pitch required",
+        ]
+    }
+
+    public func lowerDifficulty() { difficultyLevel = max(1, difficultyLevel - 1) }
+    public func raiseDifficulty() { difficultyLevel = min(5, difficultyLevel + 1) }
+
+    /// Set by ExerciseView in onAppear. Called after every graded trial so the view
+    /// can feed CompanionEngine and ProgressStore without coupling the VM to them.
+    public var onTrialResult: ((Bool) -> Void)?
 
     // MARK: - Private
 
     private var listenTask: Task<Void, Never>?
     private var playTask:   Task<Void, Never>?
+    private var timerTask:  Task<Void, Never>?
+    private var timerExpired = false
     private var logger: SessionLogger?
     private var sessionStartDate: Date? = nil
 
-    /// Elapsed time since `beginSession()` was called. Snapshot this before calling `cancel()`.
     public var sessionDuration: TimeInterval {
         sessionStartDate.map { Date().timeIntervalSince($0) } ?? 0
     }
 
-    private let stabilityCount  = 3
-    private let stabilityCents: Float = 25
+    private let stabilityCount = 3
     private let amplitudeThreshold: Float = 0.02
-    private let listenTimeoutSeconds: TimeInterval = 10  // per note, not total
+    private let listenTimeoutSeconds: TimeInterval = 10
 
     public init(audio: any AudioPlaying & MicListening) {
         self.audio = audio
     }
 
-    /// Start a new logging session and enable the mic tap.
-    public func beginSession() {
+    // MARK: - Session lifecycle
+
+    public func beginSession(duration: SessionDuration = .open) {
         logger = SessionLogger(mode: "intervals")
         audio.enableMicTap()
         sessionStartDate = Date()
-        totalTrials  = 0
+        totalTrials   = 0
         correctTrials = 0
+        timerExpired  = false
+        sessionExpired = false
+
+        timerTask?.cancel()
+        if let minutes = duration.minutes {
+            let endDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
+            timerTask = Task { [weak self] in
+                guard let self else { return }
+                while Date() < endDate, !Task.isCancelled {
+                    self.timeRemainingSeconds = max(0, Int(endDate.timeIntervalSince(Date())))
+                    try? await Task.sleep(for: .seconds(1))
+                }
+                guard !Task.isCancelled else { return }
+                self.timerExpired = true
+                self.timeRemainingSeconds = 0
+            }
+        } else {
+            timeRemainingSeconds = nil
+        }
     }
 
-    /// Cancel in-flight tasks, end the logging session, and release the mic tap.
-    /// Does not touch the audio engine (lifecycle is AppSession's responsibility).
     public func cancel() {
+        timerTask?.cancel()
+        timerTask = nil
         listenTask?.cancel()
         listenTask = nil
         playTask?.cancel()
@@ -83,6 +135,9 @@ public final class ExerciseViewModel: ObservableObject {
         logger = nil
         audio.disableMicTap()
         phase = .idle
+        timeRemainingSeconds = nil
+        timerExpired  = false
+        sessionExpired = false
     }
 
     // MARK: - Control
@@ -98,7 +153,6 @@ public final class ExerciseViewModel: ObservableObject {
             let targetHz = interval.targetHz(rootHz: rootHz)
             await audio.playInterval(rootHz: rootHz, intervalHz: targetHz)
             guard !Task.isCancelled else { return }
-            // 500ms gate prevents sine tone from self-triggering the detector.
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
             beginListening(for: interval)
@@ -121,12 +175,12 @@ public final class ExerciseViewModel: ObservableObject {
 
     // MARK: - Private
 
-    private func beginListening(for interval: Interval) {
+    private func beginListening(for interval: Interval,
+                                onResult: ((Bool) -> Void)? = nil) {
         phase = .awaitingRoot
         listenTask = Task { [weak self] in
             guard let self else { return }
 
-            // Step 1: detect root note
             guard let detectedRoot = await self.waitForStableNote() else {
                 guard !Task.isCancelled else { return }
                 self.logger?.logNoRead(interval: interval, rootHz: self.rootHz)
@@ -136,12 +190,10 @@ public final class ExerciseViewModel: ObservableObject {
             }
             guard !Task.isCancelled else { return }
 
-            // Step 2: wait for silence between notes
             self.phase = .awaitingInterval
             await self.waitForSilence()
             guard !Task.isCancelled else { return }
 
-            // Step 3: detect interval note
             guard let detectedInterval = await self.waitForStableNote() else {
                 guard !Task.isCancelled else { return }
                 self.logger?.logNoRead(interval: interval, rootHz: detectedRoot)
@@ -151,19 +203,27 @@ public final class ExerciseViewModel: ObservableObject {
             }
             guard !Task.isCancelled else { return }
 
-            // Grade using the interval between the two played notes
-            let result = ExerciseResult.grade(
+            var result = ExerciseResult.grade(
                 rootHz: detectedRoot,
                 interval: interval,
                 detectedHz: detectedInterval
             )
+            // At easy difficulty levels, treat "close" as correct to widen the success zone.
+            if self.promoteCloseToCorrect, case .close = result {
+                result = .correct
+            }
+
             self.logger?.logTrial(interval: interval,
                                    rootHz: detectedRoot,
                                    detectedHz: detectedInterval,
                                    result: result)
             self.phase = .result(result)
             self.totalTrials += 1
-            if case .correct = result { self.correctTrials += 1 }
+            let correct: Bool
+            if case .correct = result { self.correctTrials += 1; correct = true }
+            else { correct = false }
+            onResult?(correct)
+            self.onTrialResult?(correct)
 
             let delay: TimeInterval
             switch result {
@@ -172,13 +232,16 @@ public final class ExerciseViewModel: ObservableObject {
             }
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled else { return }
-            self.startExercise()
+            if self.timerExpired {
+                self.sessionExpired = true
+            } else {
+                self.startExercise()
+            }
         }
     }
 
     // MARK: - Note detection helpers
 
-    /// Wait for a stable pitch reading. Returns the average Hz of the stable window, or nil on timeout.
     private func waitForStableNote() async -> Float? {
         let deadline = Date().addingTimeInterval(listenTimeoutSeconds)
         var readings: [Float] = []
@@ -203,11 +266,10 @@ public final class ExerciseViewModel: ObservableObject {
         return nil
     }
 
-    /// Wait until amplitude drops below threshold for at least 150ms.
     private func waitForSilence() async {
         let deadline = Date().addingTimeInterval(listenTimeoutSeconds)
         var quietFrames = 0
-        let requiredFrames = 3  // 3 × 50ms = 150ms of silence
+        let requiredFrames = 3
 
         while Date() < deadline, !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(50))

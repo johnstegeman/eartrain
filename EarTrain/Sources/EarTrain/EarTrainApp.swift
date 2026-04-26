@@ -12,6 +12,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate(ignoringOtherApps: true)
+        setDockIcon()
+    }
+
+    private func setDockIcon() {
+        if let image = AudieAvatarView.nsImage {
+            NSApp.applicationIconImage = image
+        }
     }
 }
 
@@ -25,6 +32,6 @@ struct EarTrainApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 1000, height: 700)
+        .defaultSize(width: 1000, height: 820)
     }
 }

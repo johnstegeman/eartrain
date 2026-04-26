@@ -42,7 +42,8 @@ public struct HomeView: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 10) {
+            AudiePNGImage(size: 88)
             Text("Audie")
                 .font(.system(size: 36, weight: .black))
                 .foregroundColor(EarTrainColors.textPrimary)

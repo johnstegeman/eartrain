@@ -41,6 +41,7 @@ struct ExerciseReadyView: View {
         VStack(spacing: 32) {
             // Icon + title + description
             VStack(spacing: 10) {
+                AudiePNGImage(size: 72)
                 Image(systemName: mode.icon)
                     .font(.system(size: 44))
                     .foregroundColor(EarTrainColors.accent)
@@ -90,6 +91,92 @@ struct ExerciseReadyView: View {
             .cornerRadius(8)
             .contentShape(Rectangle())
             .onTapGesture { selectedDuration = duration }
+    }
+}
+
+// MARK: - Difficulty indicator
+
+/// Five dots showing current difficulty level (1–5).
+/// Filled dots = at or below current level; empty = above.
+struct DifficultyDots: View {
+    let level: Int
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(Array(1...5), id: \.self) { i in
+                Circle()
+                    .fill(i <= level
+                          ? EarTrainColors.accent
+                          : EarTrainColors.textDisabled.opacity(0.4))
+                    .frame(width: 6, height: 6)
+            }
+        }
+    }
+}
+
+/// Tappable difficulty indicator. Shows 5 dots; tapping opens a popover to pick a level.
+/// Used in the running-exercise header bar.
+struct DifficultyControl: View {
+    let level: Int
+    let descriptions: [String]   // 5 strings, index 0 = level 1
+    let onSelect: (Int) -> Void
+    @State private var showPopover = false
+
+    var body: some View {
+        DifficultyDots(level: level)
+            .contentShape(Rectangle())
+            .onTapGesture { showPopover = true }
+            .popover(isPresented: $showPopover, arrowEdge: .bottom) {
+                difficultyPopover
+                    .background(EarTrainColors.bg)
+            }
+    }
+
+    private var difficultyPopover: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("DIFFICULTY")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.8)
+                .foregroundColor(EarTrainColors.textSecondary)
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 10)
+
+            ForEach(Array(1...5), id: \.self) { lvl in
+                HStack(spacing: 10) {
+                    HStack(spacing: 2) {
+                        ForEach(Array(1...5), id: \.self) { i in
+                            Circle()
+                                .fill(i <= lvl
+                                      ? EarTrainColors.accent
+                                      : EarTrainColors.textDisabled.opacity(0.3))
+                                .frame(width: 5, height: 5)
+                        }
+                    }
+                    Text(lvl - 1 < descriptions.count ? descriptions[lvl - 1] : "Level \(lvl)")
+                        .font(.system(size: 13))
+                        .foregroundColor(lvl == level
+                                         ? EarTrainColors.textPrimary
+                                         : EarTrainColors.textSecondary)
+                    Spacer()
+                    if lvl == level {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(EarTrainColors.accent)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(lvl == level ? EarTrainColors.surface : Color.clear)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onSelect(lvl)
+                    showPopover = false
+                }
+            }
+            .padding(.bottom, 10)
+        }
+        .frame(width: 280)
     }
 }
 

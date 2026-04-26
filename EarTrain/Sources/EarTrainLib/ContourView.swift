@@ -1,25 +1,22 @@
 import SwiftUI
 
 /// Contour Mode — "Higher, Lower, or Same?"
-///
-/// The most basic pitch discrimination exercise: the app plays two notes and
-/// the user identifies whether the second was higher, lower, or the same as
-/// the first. Designed as the entry point for CI users who are not yet ready
-/// for interval identification.
 public struct ContourView: View {
     @ObservedObject var vm: ContourViewModel
     @ObservedObject var store: ProgressStore
     @ObservedObject var audio: AudioEngineManager
+    @ObservedObject var companion: CompanionEngine
     @Binding var activeMode: AppMode
-
     @Binding var selectedDuration: SessionDuration
     @State private var sessionSummary: SessionEndSummary? = nil
 
     public init(vm: ContourViewModel, store: ProgressStore, audio: AudioEngineManager,
-                activeMode: Binding<AppMode>, selectedDuration: Binding<SessionDuration>) {
+                companion: CompanionEngine, activeMode: Binding<AppMode>,
+                selectedDuration: Binding<SessionDuration>) {
         self.vm = vm
         self.store = store
         self.audio = audio
+        self.companion = companion
         self._activeMode = activeMode
         self._selectedDuration = selectedDuration
     }
@@ -29,7 +26,8 @@ public struct ContourView: View {
             if vm.phase == .idle {
                 ExerciseReadyView(mode: .contour, selectedDuration: $selectedDuration,
                                   volume: $audio.outputVolume) {
-                    vm.beginSession()
+                    companion.sessionStarted()
+                    vm.beginSession(duration: selectedDuration)
                     vm.startExercise()
                 }
             } else {
@@ -41,10 +39,23 @@ public struct ContourView: View {
                         answerButtons
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    AudieChatPanel(companion: companion)
                 }
             }
         }
-        .onDisappear { vm.cancel() }
+        .onAppear {
+            companion.difficultyDelegate = vm
+            companion.onFocusArea = { [weak vm] area in vm?.focusRegister(named: area) }
+        }
+        .onDisappear {
+            if companion.difficultyDelegate === vm { companion.difficultyDelegate = nil }
+            companion.onFocusArea = nil
+            vm.clearRegisterFocus()
+            vm.cancel()
+        }
+        .onChange(of: vm.sessionExpired) { expired in
+            if expired { endSession() }
+        }
         .sheet(item: $sessionSummary) { summary in
             EndOfSessionView(summary: summary, store: store, activeMode: $activeMode)
         }
@@ -54,6 +65,17 @@ public struct ContourView: View {
         HStack {
             VolumeSlider(volume: $audio.outputVolume)
             Spacer()
+            DifficultyControl(level: vm.difficultyLevel,
+                              descriptions: vm.difficultyDescriptions) { level in
+                vm.difficultyLevel = level
+            }
+            .padding(.trailing, 6)
+            if let secs = vm.timeRemainingSeconds {
+                Text(formatTime(secs))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(secs < 60 ? EarTrainColors.error : EarTrainColors.textDisabled)
+                    .padding(.trailing, 8)
+            }
             Button("End Session") { endSession() }
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(EarTrainColors.textDisabled)
@@ -78,9 +100,7 @@ public struct ContourView: View {
 
     private var scorePanel: some View {
         HStack(spacing: 4) {
-            Text(vm.totalTrials == 0
-                 ? "—"
-                 : "\(vm.correctTrials)/\(vm.totalTrials)")
+            Text(vm.totalTrials == 0 ? "—" : "\(vm.correctTrials)/\(vm.totalTrials)")
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundColor(EarTrainColors.textSecondary)
             if vm.totalTrials > 0 {
@@ -101,7 +121,6 @@ public struct ContourView: View {
             switch vm.phase {
             case .idle:
                 statusText("Ready", color: EarTrainColors.textSecondary)
-
             case .playing:
                 HStack(spacing: 8) {
                     Image(systemName: "speaker.wave.2.fill")
@@ -109,7 +128,6 @@ public struct ContourView: View {
                 }
                 .foregroundColor(EarTrainColors.accent)
                 .font(.system(size: 16, weight: .semibold))
-
             case .awaitingAnswer:
                 VStack(spacing: 4) {
                     Text("Was the second note…")
@@ -125,12 +143,20 @@ public struct ContourView: View {
                         .contentShape(Rectangle())
                         .onTapGesture { vm.replayPair() }
                 }
-
             case .result(let correct, let answer):
-                resultBadge(correct: correct, answer: answer)
+                VStack(spacing: 8) {
+                    resultBadge(correct: correct, answer: answer)
+                    if !correct {
+                        Text("Hear it again")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(EarTrainColors.accent)
+                            .contentShape(Rectangle())
+                            .onTapGesture { vm.replayAfterResult() }
+                    }
+                }
             }
         }
-        .frame(height: 72)
+        .frame(minHeight: 72)
     }
 
     private func statusText(_ text: String, color: Color) -> some View {
@@ -188,11 +214,28 @@ public struct ContourView: View {
         )
         .opacity(disabled ? 0.4 : 1)
         .contentShape(Rectangle())
-        .onTapGesture { if !disabled { vm.answer(contour) } }
+        .onTapGesture {
+            if !disabled {
+                vm.answer(contour) { correct in
+                    let context = TrialContext(areaName: vm.currentRegisterName)
+                    companion.recordOutcome(correct: correct, context: context)
+                    let isNewBest = store.updateStreakIfRecord(modeKey: "contour",
+                                                              difficulty: vm.difficultyLevel,
+                                                              streak: companion.currentStreak)
+                    if isNewBest { companion.announcePersonalBest(streak: companion.currentStreak) }
+                }
+            }
+        }
+    }
+
+    private func formatTime(_ seconds: Int) -> String {
+        let m = seconds / 60
+        let s = seconds % 60
+        return String(format: "%d:%02d", m, s)
     }
 }
 
-// MARK: - Button style (internal — shared with IdentificationView)
+// MARK: - Button style (shared with IdentificationView)
 
 struct ContourButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

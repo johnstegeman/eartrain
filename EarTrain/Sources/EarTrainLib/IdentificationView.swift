@@ -1,23 +1,22 @@
 import SwiftUI
 
 /// Identification Mode — "Is this a m3?"
-///
-/// Listening-only ear training. The app teaches an interval by playing and
-/// labelling it, then immediately quizzes with an unlabelled pair.
 public struct IdentificationView: View {
     @ObservedObject var vm: IdentificationViewModel
     @ObservedObject var store: ProgressStore
     @ObservedObject var audio: AudioEngineManager
+    @ObservedObject var companion: CompanionEngine
     @Binding var activeMode: AppMode
-
     @Binding var selectedDuration: SessionDuration
     @State private var sessionSummary: SessionEndSummary? = nil
 
     public init(vm: IdentificationViewModel, store: ProgressStore, audio: AudioEngineManager,
-                activeMode: Binding<AppMode>, selectedDuration: Binding<SessionDuration>) {
+                companion: CompanionEngine, activeMode: Binding<AppMode>,
+                selectedDuration: Binding<SessionDuration>) {
         self.vm = vm
         self.store = store
         self.audio = audio
+        self.companion = companion
         self._activeMode = activeMode
         self._selectedDuration = selectedDuration
     }
@@ -27,7 +26,8 @@ public struct IdentificationView: View {
             if vm.phase == .idle {
                 ExerciseReadyView(mode: .identification, selectedDuration: $selectedDuration,
                                   volume: $audio.outputVolume) {
-                    vm.beginSession()
+                    companion.sessionStarted()
+                    vm.beginSession(duration: selectedDuration)
                     vm.startSession()
                 }
             } else {
@@ -40,10 +40,18 @@ public struct IdentificationView: View {
                         answerButtons
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    AudieChatPanel(companion: companion)
                 }
             }
         }
-        .onDisappear { vm.cancel() }
+        .onAppear  { companion.difficultyDelegate = vm }
+        .onDisappear {
+            if companion.difficultyDelegate === vm { companion.difficultyDelegate = nil }
+            vm.cancel()
+        }
+        .onChange(of: vm.sessionExpired) { expired in
+            if expired { endSession() }
+        }
         .sheet(item: $sessionSummary) { summary in
             EndOfSessionView(summary: summary, store: store, activeMode: $activeMode)
         }
@@ -53,6 +61,17 @@ public struct IdentificationView: View {
         HStack {
             VolumeSlider(volume: $audio.outputVolume)
             Spacer()
+            DifficultyControl(level: vm.difficultyLevel,
+                              descriptions: vm.difficultyDescriptions) { level in
+                vm.difficultyLevel = level
+            }
+            .padding(.trailing, 6)
+            if let secs = vm.timeRemainingSeconds {
+                Text(formatTime(secs))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(secs < 60 ? EarTrainColors.error : EarTrainColors.textDisabled)
+                    .padding(.trailing, 8)
+            }
             Button("End Session") { endSession() }
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(EarTrainColors.textDisabled)
@@ -77,9 +96,7 @@ public struct IdentificationView: View {
 
     private var scorePanel: some View {
         HStack(spacing: 4) {
-            Text(vm.totalTrials == 0
-                 ? "—"
-                 : "\(vm.correctTrials)/\(vm.totalTrials)")
+            Text(vm.totalTrials == 0 ? "—" : "\(vm.correctTrials)/\(vm.totalTrials)")
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundColor(EarTrainColors.textSecondary)
             if vm.totalTrials > 0 {
@@ -93,19 +110,16 @@ public struct IdentificationView: View {
         .padding(.top, 8)
     }
 
-    // MARK: - Teaching panel (shows focus interval name)
+    // MARK: - Teaching panel
 
     private var teachPanel: some View {
         VStack(spacing: 8) {
-            // Short name — big, always visible as the "thing being learned"
             Text(vm.focusInterval.shortName)
                 .font(.system(size: 64, weight: .black))
                 .foregroundColor(EarTrainColors.textPrimary)
             Text(vm.focusInterval.displayName)
                 .font(.system(size: 14))
                 .foregroundColor(EarTrainColors.textSecondary)
-
-            // Teaching label — only shown during the teach phase
             if case .teaching = vm.phase {
                 HStack(spacing: 6) {
                     Image(systemName: "speaker.wave.2.fill")
@@ -116,9 +130,7 @@ public struct IdentificationView: View {
                 .foregroundColor(EarTrainColors.accent)
                 .transition(.opacity)
             } else {
-                // Placeholder keeps layout stable
-                Text(" ")
-                    .font(.system(size: 12))
+                Text(" ").font(.system(size: 12))
             }
         }
         .padding(24)
@@ -132,17 +144,15 @@ public struct IdentificationView: View {
         return false
     }
 
-    // MARK: - Status panel (quiz prompt / result)
+    // MARK: - Status panel
 
     private var statusPanel: some View {
         Group {
             switch vm.phase {
             case .idle:
                 EmptyView()
-
             case .teaching:
                 EmptyView()
-
             case .playingQuiz:
                 HStack(spacing: 8) {
                     Image(systemName: "speaker.wave.2.fill")
@@ -150,7 +160,6 @@ public struct IdentificationView: View {
                 }
                 .foregroundColor(EarTrainColors.accent)
                 .font(.system(size: 16, weight: .semibold))
-
             case .awaitingAnswer:
                 VStack(spacing: 6) {
                     Text("Is this a \(vm.focusInterval.displayName)?")
@@ -166,7 +175,6 @@ public struct IdentificationView: View {
                         .contentShape(Rectangle())
                         .onTapGesture { vm.replayQuiz() }
                 }
-
             case .result(let correct, let wasTarget, let actual):
                 resultBadge(correct: correct, wasTarget: wasTarget, actual: actual)
             }
@@ -204,10 +212,22 @@ public struct IdentificationView: View {
 
         return HStack(spacing: 24) {
             answerButton(label: "Yes", icon: "checkmark", enabled: enabled) {
-                vm.answer(true)
+                vm.answer(true) { correct in
+                    companion.recordOutcome(correct: correct)
+                    let isNewBest = store.updateStreakIfRecord(modeKey: "identification",
+                                                              difficulty: vm.difficultyLevel,
+                                                              streak: companion.currentStreak)
+                    if isNewBest { companion.announcePersonalBest(streak: companion.currentStreak) }
+                }
             }
             answerButton(label: "No", icon: "xmark", enabled: enabled) {
-                vm.answer(false)
+                vm.answer(false) { correct in
+                    companion.recordOutcome(correct: correct)
+                    let isNewBest = store.updateStreakIfRecord(modeKey: "identification",
+                                                              difficulty: vm.difficultyLevel,
+                                                              streak: companion.currentStreak)
+                    if isNewBest { companion.announcePersonalBest(streak: companion.currentStreak) }
+                }
             }
         }
     }
@@ -234,8 +254,10 @@ public struct IdentificationView: View {
         .contentShape(Rectangle())
         .onTapGesture { if enabled { action() } }
     }
+
+    private func formatTime(_ seconds: Int) -> String {
+        let m = seconds / 60
+        let s = seconds % 60
+        return String(format: "%d:%02d", m, s)
+    }
 }
-
-// MARK: - Reuse ContourButtonStyle
-
-// Defined in ContourView.swift — visible within the module.
