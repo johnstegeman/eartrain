@@ -5,9 +5,9 @@ import SwiftUI
 /// Listening-only ear training. The app teaches an interval by playing and
 /// labelling it, then immediately quizzes with an unlabelled pair.
 public struct IdentificationView: View {
-    @StateObject private var vm = IdentificationViewModel()
+    @ObservedObject var vm: IdentificationViewModel
 
-    public init() {}
+    public init(vm: IdentificationViewModel) { self.vm = vm }
 
     public var body: some View {
         VStack(spacing: 28) {
@@ -17,11 +17,8 @@ public struct IdentificationView: View {
             answerButtons
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            vm.startEngine()
-            vm.startSession()
-        }
-        .onDisappear { vm.stopEngine() }
+        .onAppear  { vm.startSession() }
+        .onDisappear { vm.cancel() }
     }
 
     // MARK: - Score

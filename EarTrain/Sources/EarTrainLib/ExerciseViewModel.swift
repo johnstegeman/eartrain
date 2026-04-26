@@ -36,9 +36,9 @@ public final class ExerciseViewModel: ObservableObject {
     /// Active interval set — defaults to priority drill set from DESIGN.md.
     public var activeIntervals: [Interval] = [.m3, .M3, .P5, .P8]
 
-    // MARK: - Audio (owned here so ExerciseView can use @StateObject cleanly)
+    // MARK: - Audio (injected — owned by AppSession)
 
-    public let audio = AudioEngineManager()
+    private let audio: any AudioPlaying & MicListening
 
     // MARK: - Private
 
@@ -51,19 +51,22 @@ public final class ExerciseViewModel: ObservableObject {
     private let amplitudeThreshold: Float = 0.02
     private let listenTimeoutSeconds: TimeInterval = 10  // per note, not total
 
-    public init() {}
+    public init(audio: any AudioPlaying & MicListening) {
+        self.audio = audio
+    }
 
-    public func startEngine() {
-        audio.start()
+    /// Start a new logging session. Call from ExerciseView.onAppear.
+    public func beginSession() {
         logger = SessionLogger(mode: "intervals")
     }
 
-    public func stopEngine() {
+    /// Cancel in-flight tasks and end the logging session.
+    /// Does not touch the audio engine (lifecycle is AppSession's responsibility).
+    public func cancel() {
         listenTask?.cancel()
         listenTask = nil
         playTask?.cancel()
         playTask = nil
-        audio.stop()
         logger?.endSession()
         logger = nil
     }

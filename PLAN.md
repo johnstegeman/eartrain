@@ -52,7 +52,7 @@ No Swift changes needed unless we want to expose a master volume control in Sett
 
 ## Phase 1 — Complete the Core Interval Trainer
 
-### 1.1 — Protocol extraction for testability `planned`
+### 1.1 — Protocol extraction for testability `done`
 Extract `AudioPlaying` and `MicListening` protocols from `AudioEngineManager`.
 Required before unit tests and lesson architecture.
 

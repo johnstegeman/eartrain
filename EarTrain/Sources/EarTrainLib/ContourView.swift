@@ -7,9 +7,9 @@ import SwiftUI
 /// the first. Designed as the entry point for CI users who are not yet ready
 /// for interval identification.
 public struct ContourView: View {
-    @StateObject private var vm = ContourViewModel()
+    @ObservedObject var vm: ContourViewModel
 
-    public init() {}
+    public init(vm: ContourViewModel) { self.vm = vm }
 
     public var body: some View {
         VStack(spacing: 32) {
@@ -18,11 +18,8 @@ public struct ContourView: View {
             answerButtons
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            vm.startEngine()
-            vm.startExercise()
-        }
-        .onDisappear { vm.stopEngine() }
+        .onAppear  { vm.startExercise() }
+        .onDisappear { vm.cancel() }
     }
 
     // MARK: - Score

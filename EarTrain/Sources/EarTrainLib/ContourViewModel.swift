@@ -52,9 +52,9 @@ public final class ContourViewModel: ObservableObject {
     @Published public var totalTrials: Int = 0
     @Published public var correctTrials: Int = 0
 
-    // MARK: - Audio
+    // MARK: - Audio (injected — owned by AppSession)
 
-    public let audio = AudioEngineManager()
+    private let audio: any AudioPlaying
 
     // MARK: - Configuration
 
@@ -68,13 +68,15 @@ public final class ContourViewModel: ObservableObject {
     private var secondHz: Float = 660
     private var currentTask: Task<Void, Never>?
 
-    public init() {}
+    public init(audio: any AudioPlaying) {
+        self.audio = audio
+    }
 
-    public func startEngine() { audio.start() }
-    public func stopEngine()  {
+    /// Cancel any in-flight exercise task. Does not touch the audio engine
+    /// (lifecycle is AppSession's responsibility).
+    public func cancel() {
         currentTask?.cancel()
         currentTask = nil
-        audio.stop()
     }
 
     // MARK: - Control

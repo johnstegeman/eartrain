@@ -1,7 +1,28 @@
 import SwiftUI
 import AVFoundation
 
+/// Top-level owner of the shared audio engine and all freeplay ViewModels.
+/// One AudioEngineManager instance is created here and injected into each VM,
+/// ensuring all modes share a single engine (CI keep-alive stays active across
+/// tab switches; no redundant mic taps).
+@MainActor
+final class AppSession: ObservableObject {
+    let audio: AudioEngineManager
+    let contourVM: ContourViewModel
+    let identVM: IdentificationViewModel
+    let exerciseVM: ExerciseViewModel
+
+    init() {
+        let audio = AudioEngineManager()
+        self.audio    = audio
+        contourVM     = ContourViewModel(audio: audio)
+        identVM       = IdentificationViewModel(audio: audio)
+        exerciseVM    = ExerciseViewModel(audio: audio)
+    }
+}
+
 public struct ContentView: View {
+    @StateObject private var session = AppSession()
     @StateObject private var mic = MicrophonePermissionManager()
     @State private var mode: AppMode = .intervals
 
@@ -25,6 +46,10 @@ public struct ContentView: View {
         .background(EarTrainColors.bg)
         .task {
             await mic.requestIfNeeded()
+            if mic.isAuthorized { session.audio.start() }
+        }
+        .onChange(of: mic.isAuthorized) { authorized in
+            if authorized { session.audio.start() }
         }
     }
 
@@ -53,9 +78,9 @@ public struct ContentView: View {
     @ViewBuilder
     private var modeContent: some View {
         switch mode {
-        case .intervals:      ExerciseView()
-        case .contour:        ContourView()
-        case .identification: IdentificationView()
+        case .intervals:      ExerciseView(vm: session.exerciseVM)
+        case .contour:        ContourView(vm: session.contourVM)
+        case .identification: IdentificationView(vm: session.identVM)
         case .settings:       SettingsView()
         }
     }

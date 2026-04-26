@@ -3,9 +3,9 @@ import SwiftUI
 /// Active interval-training exercise screen.
 /// Wired to ExerciseViewModel for state; AudioEngineManager is owned by the parent.
 public struct ExerciseView: View {
-    @StateObject private var vm = ExerciseViewModel()
+    @ObservedObject var vm: ExerciseViewModel
 
-    public init() {}
+    public init(vm: ExerciseViewModel) { self.vm = vm }
 
     public var body: some View {
         VStack(spacing: 32) {
@@ -15,10 +15,10 @@ public struct ExerciseView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            vm.startEngine()
+            vm.beginSession()
             vm.startExercise()
         }
-        .onDisappear { vm.stopEngine() }
+        .onDisappear { vm.cancel() }
     }
 
     // MARK: - Interval display
