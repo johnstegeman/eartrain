@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// App settings — accessible via the Settings tab in the main navigation.
+/// App settings — presented as a sheet (⌘,) so the user can change
+/// settings mid-session without losing their place.
 public struct SettingsView: View {
 
     @ObservedObject var audio: AudioEngineManager
     @ObservedObject var store: ProgressStore
     @AppStorage(GuitarTimbre.defaultsKey) private var timbreRaw: String = GuitarTimbre.sine.rawValue
+    @Environment(\.dismiss) private var dismiss
 
     @State private var inputDevices:  [AudioDevice] = []
     @State private var outputDevices: [AudioDevice] = []
@@ -22,15 +24,33 @@ public struct SettingsView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                deviceSection
-                toneSection
-                dataSection
+        VStack(spacing: 0) {
+            // Sheet header with dismiss
+            HStack {
+                Text("Settings")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(EarTrainColors.textPrimary)
+                Spacer()
+                Button("Done") { dismiss() }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(EarTrainColors.accent)
             }
-            .padding(32)
+            .padding(.horizontal, 32)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+
+            Divider().background(Color(hex: "#2d2d2d"))
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    deviceSection
+                    toneSection
+                    dataSection
+                }
+                .padding(32)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(width: 540, height: 600)
         .background(EarTrainColors.bg)
         .onAppear { reloadDevices() }
     }

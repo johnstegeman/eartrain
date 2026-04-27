@@ -35,6 +35,7 @@ public struct ContentView: View {
     @StateObject private var mic = MicrophonePermissionManager()
     @State private var mode: AppMode = .home
     @State private var sessionDuration: SessionDuration = .open
+    @State private var showingSettings = false
 
     public init() {}
 
@@ -49,6 +50,15 @@ public struct ContentView: View {
                         .background(Color(hex: "#2d2d2d"))
                     modeContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .sheet(isPresented: $showingSettings) {
+                    SettingsView(audio: session.audio, store: session.progressStore)
+                }
+                // Hidden button wires ⌘, to open Settings from anywhere in the app.
+                .background {
+                    Button("") { showingSettings = true }
+                        .keyboardShortcut(",", modifiers: .command)
+                        .hidden()
                 }
             }
         }
@@ -96,7 +106,28 @@ public struct ContentView: View {
                 }
                 .buttonStyle(.plain)
             }
+
             Spacer()
+
+            Divider().background(Color(hex: "#2d2d2d")).padding(.horizontal, 8)
+
+            // Settings gear — opens sheet, doesn't navigate (⌘,)
+            Button {
+                showingSettings = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 14))
+                        .frame(width: 18, alignment: .center)
+                    Text("Settings")
+                        .font(.system(size: 13))
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .foregroundColor(EarTrainColors.textSecondary)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 12)
@@ -163,9 +194,9 @@ public enum AppMode: CaseIterable {
     case intervals
     case identification
 
-    // Only the 6 sidebar destinations appear in the nav list.
+    // The 5 sidebar nav destinations. Settings is a sheet (⌘,), not a sidebar item.
     public static var allCases: [AppMode] {
-        [.home, .tuner, .plans, .freeplay, .progress, .settings]
+        [.home, .tuner, .plans, .freeplay, .progress]
     }
 
     public var label: String {

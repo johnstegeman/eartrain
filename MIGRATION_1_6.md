@@ -91,6 +91,9 @@ CREATE TABLE sessions (
                                         --   Switching plans ends the current session and
                                         --   starts a new one with the new plan_id.
     plan_step      INTEGER,             -- which step within the plan (0-indexed); null for Freeplay
+    timbre         TEXT,                -- GuitarTimbre rawValue at session start:
+                                        --   'sine'|'acoustic'|'clean_electric'|'overdrive'
+                                        --   Lets you correlate accuracy with timbre choice.
     started_at     INTEGER NOT NULL,    -- Unix timestamp
     ended_at       INTEGER,
     total_trials   INTEGER NOT NULL DEFAULT 0,
@@ -171,6 +174,7 @@ public final class AudieDatabase {
                     primitive      TEXT    NOT NULL,
                     plan_id        TEXT,
                     plan_step      INTEGER,
+                    timbre         TEXT,
                     started_at     INTEGER NOT NULL,
                     ended_at       INTEGER,
                     total_trials   INTEGER NOT NULL DEFAULT 0,
@@ -262,7 +266,9 @@ then remove it in the follow-up.
    }
    ```
 
-5. Add `planId: String?` and `planStep: Int?` parameters to `SessionLogger.init()`.
+5. Add `planId: String?`, `planStep: Int?`, and `timbre: String?` parameters to `SessionLogger.init()`.
+   Read `timbre` from `UserDefaults.standard.string(forKey: GuitarTimbre.defaultsKey)` at init
+   time so the session captures whichever timbre was active when practice started.
    Default both to `nil` so existing call sites compile unchanged.
    When `LessonRunner` ships (Phase 2), it will pass the active plan ID and step index.
    Switching plans calls `endSession()` on the current logger and creates a new `SessionLogger`
@@ -272,9 +278,9 @@ then remove it in the follow-up.
    ```swift
    try? AudieDatabase.shared.dbQueue.write { d in
        try d.execute(sql: """
-           INSERT OR IGNORE INTO sessions (id, primitive, plan_id, plan_step, started_at)
-           VALUES (?, ?, ?, ?, ?)
-           """, arguments: [session.id, mode, planId, planStep,
+           INSERT OR IGNORE INTO sessions (id, primitive, plan_id, plan_step, timbre, started_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           """, arguments: [session.id, mode, planId, planStep, timbre,
                             Int(Date().timeIntervalSince1970)])
    }
    ```
