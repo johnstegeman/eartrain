@@ -43,11 +43,12 @@ public struct ContentView: View {
             if !session.companion.hasCompletedOnboarding {
                 OnboardingView(companion: session.companion)
             } else {
-                VStack(spacing: 0) {
-                    modePicker
-                    Divider().background(EarTrainColors.surface)
+                NavigationSplitView {
+                    sidebarList
+                } detail: {
                     modeContent
                 }
+                .navigationSplitViewStyle(.balanced)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -72,25 +73,16 @@ public struct ContentView: View {
         }
     }
 
-    private var modePicker: some View {
-        HStack(spacing: 0) {
+    private var sidebarList: some View {
+        List(selection: $mode) {
             ForEach(AppMode.allCases, id: \.self) { m in
-                let selected = mode == m
-                Button(m.label) { mode = m }
-                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
-                    .foregroundColor(selected ? .black : EarTrainColors.textSecondary)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
-                    .background(selected ? EarTrainColors.accent : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .buttonStyle(.plain)
+                Label(m.label, systemImage: m.icon)
+                    .tag(m)
             }
         }
-        .padding(4)
-        .background(EarTrainColors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .padding(.horizontal, 24)
-        .padding(.vertical, 10)
+        .listStyle(.sidebar)
+        .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
+        .background(EarTrainColors.bg)
     }
 
     @ViewBuilder
