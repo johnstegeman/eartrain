@@ -31,7 +31,7 @@ struct EarTrainApp: App {
             ContentView()
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentMinSize)
+        .windowResizability(.automatic)
         .defaultSize(width: 1000, height: 700)
     }
 }
