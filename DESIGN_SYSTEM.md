@@ -1,6 +1,6 @@
 # Audie Design System
 
-Design reference for the Audie macOS app (SwiftUI). Keep this file current whenever tokens, components, or patterns change. Agents and contributors should consult it before writing any UI code.
+Design reference for the Audie macOS app (SwiftUI). Keep this file current whenever tokens, components, navigation, or patterns change. Agents and contributors must consult it before writing any UI code.
 
 ---
 
@@ -10,6 +10,123 @@ Design reference for the Audie macOS app (SwiftUI). Keep this file current whene
 - **Amber as the single accent.** `EarTrainColors.accent` (`#f5a623`) is the only interactive highlight color. Avoid introducing secondary accent colors.
 - **Minimal chrome.** Hidden title bar, no toolbars. UI is content-first.
 - **Accessible interactivity.** Every tappable element must be a `Button`, never a `Text` with `.onTapGesture`. This enables keyboard navigation, `.disabled()`, and `AccentButtonStyle`'s disabled-opacity logic.
+- **Primitives are internal, plans are user-facing.** The 12+ exercise primitives (contour, interval-id, chord-quality, etc. — see `LESSON_PRIMITIVES.md`) are runtime building blocks. They never appear as navigation destinations. Users pick **plans** (curricula) or **freeplay** (direct primitive access for testing/casual use).
+
+---
+
+## App architecture
+
+The app is layered. Each layer has one responsibility. Don't blur them.
+
+| Layer | What | User-facing? | Examples |
+|---|---|---|---|
+| **Primitive** | An atomic exercise loop with parameters | Indirectly | `contour`, `interval-id`, `chord-quality` |
+| **Plan** | A sequence of primitive steps with completion criteria | Yes (browse/select) | `default-ci.etplan`, `intermediate.etplan`, custom `.etplan` |
+| **Session** | An active practice run — either following a plan or freeplay | Yes (active state) | "Beginner CI · step 4" or "Freeplay · Contour · 10 min" |
+| **Tool** | A non-exercise utility | Yes (sidebar item) | Tuner |
+
+**Implication for navigation:** primitives never become sidebar items. Adding `chord-progression` in 2027 doesn't grow the sidebar — it adds a new step type valid in `.etplan` files and a new entry in the Freeplay grid.
+
+---
+
+## Navigation
+
+The app uses `NavigationSplitView` with a left sidebar and a detail area. Six sidebar destinations, fixed forever:
+
+| Order | Item | Role | When to visit |
+|---|---|---|---|
+| 1 | **Home** | Multi-mode launcher with dashboard | Default destination on launch; pick what to practice |
+| 2 | **Tune** | Chromatic tuner | Before a session, to verify the guitar is in tune |
+| 3 | **Plans** | Library of lesson plans — bundled + user-imported `.etplan` | Browse curricula, switch active plan, view plan details |
+| 4 | **Freeplay** | Grid/list of all built primitives for direct launch | "I want to drill contour for 10 minutes" or "I'm a dev testing primitive #6" |
+| 5 | **Progress** | Confusion matrix heatmap, accuracy trends | Review per-bucket performance |
+| 6 | **Settings** | Audio devices, defaults, recalibration | Configuration |
+
+**Active session is NOT a sidebar destination.** When a user starts a session (from Home or Plans or Freeplay), the session view takes over the detail area. Exiting the session returns to wherever the user launched from. Sidebar selection should be preserved across the session.
+
+**No top tab bars anywhere.** The app previously had top tabs; this is now an anti-pattern. Use the sidebar for top-level destinations, sheets for modal config, and full-screen detail for active sessions.
+
+---
+
+## Home: multi-mode launcher
+
+Home is not a static dashboard — it's the launcher. It must handle two states:
+
+### State A: with active plan (most common)
+
+```
+TODAY'S FOCUS
+┌──────────────────────────────────────────────────┐
+│ Continue: Beginner CI Plan — Step 4 of 12        │
+│ Interval ID · m3 vs M3 in mid register           │
+│                                    [ Continue ▶ ]│
+└──────────────────────────────────────────────────┘
+
+OTHER WAYS TO PRACTICE
+[ Drill My Misses ]  [ Freeplay ]  [ Switch Plan ]
+
+YOUR STATS
+[7 sessions]  [Best: P8 89%]  [Needs work: m3 41%]  [2.4h practice]
+
+RECENT SESSIONS
+Apr 25 · 14 min · 67%
+Apr 24 · 10 min · 58%
+```
+
+### State B: no active plan (advanced users / post-completion)
+
+```
+WHAT TO PRACTICE TODAY
+
+[ Drill My Misses ]   recommended — m3 in low register, 41% accuracy
+[ Freeplay ]          pick any built primitive
+[ Browse Plans ]      structured curricula
+
+YOUR STATS / RECENT SESSIONS as above
+```
+
+**Rules for Home:**
+- No standalone Audie avatar / branding header. The avatar belongs in onboarding only. The sidebar app icon and the Audie chat panel during sessions are sufficient brand presence.
+- Stats row is always visible if `store.stats.totalSessions > 0`. New users see an empty-state variant.
+- "Continue" CTA is the spine when a plan is active. Without a plan, "Drill My Misses" takes that role.
+- Home fits in the default window (1000×920) without scrolling. Trim content before adding overflow.
+
+---
+
+## Plans library
+
+The Plans destination shows a card grid:
+- **Active plan card** at the top, marked, with progress indicator and "Continue" / "View Plan" actions.
+- **Available plans** below — bundled (`default-ci.etplan`, `intermediate.etplan`) and user-imported.
+- **"Import .etplan"** CTA for loading custom plans from disk.
+
+Clicking a plan card opens a plan detail sheet showing: name, author, description, step list, and "Make Active" / "Start Plan" actions. Switching plans preserves the previous plan's progress (so the user can return).
+
+---
+
+## Freeplay
+
+Freeplay is direct primitive access — the escape hatch for advanced users and the test surface for development.
+
+Layout: a grid or list of all currently-built primitives, with a brief description and a "Start" button per primitive. Defaults parameters are sensible; advanced parameter customization is fine but not required.
+
+When new primitives ship (e.g., `pitch-match`, `chord-quality`), they appear automatically in the Freeplay grid. Freeplay is the canonical surface for "test the new primitive end-to-end" during development.
+
+Freeplay sessions don't advance plan progress and don't modify any plan state. They do log to the confusion matrix.
+
+---
+
+## Active session pattern
+
+When a session starts, the detail area becomes the session view. The sidebar stays visible (don't hide it for focus mode unless the user explicitly toggles it).
+
+Session lifecycle:
+1. **Pre-session ready screen** (`ExerciseReadyView` pattern) — duration, volume, Start.
+2. **Active session** — `ExerciseSessionBar` header + primitive-specific content + `AudieChatPanel`.
+3. **End-of-session sheet** — stats summary, next-action CTAs.
+4. Return to launching destination (Home / Plans / Freeplay).
+
+For plan sessions, the runner advances through steps without returning to the launcher between steps; the end-of-session sheet appears when the plan completes a milestone or the user ends the session.
 
 ---
 
@@ -226,6 +343,11 @@ The ready screen (`ExerciseReadyView`) is shown when the VM's phase is `.idle` �
 
 | Anti-pattern | Correct alternative |
 |---|---|
+| **Top tab bar for navigation** | `NavigationSplitView` sidebar with the 6 fixed destinations |
+| **Per-primitive sidebar items** (e.g. a "Contour" sidebar entry) | Primitives surface inside `Plans`, `Freeplay`, or active sessions only |
+| **Adding a sidebar item for a new exercise type** | New primitive → appears in Freeplay grid + becomes valid step type in `.etplan` |
+| **Branding header on Home** (centered avatar + app name) | Home is a launcher; avatar lives in onboarding and the chat panel only |
+| **Treating Home as a static dashboard** | Home is the multi-mode launcher; both with-plan and no-plan states must work |
 | Hardcoded hex colors (`Color(hex: "#…")`) | `EarTrainColors.*` token |
 | `.cornerRadius(N)` | `.clipShape(RoundedRectangle(cornerRadius: N))` |
 | `Text(…).onTapGesture { }` | `Button { } label: { }.buttonStyle(.plain)` |

@@ -1,5 +1,21 @@
 # TODOS
 
+## Navigation refactor (Phase 1.5)
+
+**What:** Migrate the app from top-tab navigation to a `NavigationSplitView` sidebar with
+6 fixed destinations: Home / Tune / Plans / Freeplay / Progress / Settings.
+**Why:** Per `LESSON_PRIMITIVES.md`, 12 exercise primitives are planned. Current top-tab
+nav puts each primitive on its own tab and has no path to scale. The `.etplan` lesson
+plan system (Phase 2) requires a Plans destination. The new sidebar architecture is fixed
+at 6 items regardless of how many primitives ship.
+**Spec:** `DESIGN_SYSTEM.md` "App architecture" and "Navigation" sections.
+**Migration plan:** see `MIGRATION_NAV_PHASE_1_5.md` (4 sequential steps, each independently
+shippable). Do them in order; do not bundle.
+**Depends on:** nothing — this is a chassis change with no upstream blockers.
+**Unblocks:** Phase 2 (LessonRunner, `.etplan` loader, default plan bundling).
+
+---
+
 ## ExerciseViewModel pitch detection unit tests
 
 **What:** Unit tests for the two-note detection logic in ExerciseViewModel.

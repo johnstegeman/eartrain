@@ -205,6 +205,49 @@ Skip option: app starts cold with no prior data.
 
 ---
 
+## Phase 1.5 — Navigation Refactor `next`
+
+**Problem:** The current top-tab navigation surfaces each exercise primitive as its own
+top-level destination (Home, Tune, Contour, Intervals, Identify, Progress, Settings).
+With 12 primitives planned (`LESSON_PRIMITIVES.md`) plus a planned plan-authoring system
+(.etplan files, `LessonRunner`), per-primitive navigation does not scale. Tabs cap around
+7-8 items; the current 7 is already at the ceiling.
+
+**Spec:** see `DESIGN_SYSTEM.md` "App architecture" and "Navigation" sections.
+
+**Target architecture:** primitives are runtime building blocks; users navigate to plans
+or freeplay. Sidebar fixed at 6 items: **Home / Tune / Plans / Freeplay / Progress / Settings**.
+
+This phase delivers the navigation chassis only — the LessonRunner and `.etplan` plumbing
+remain Phase 2 work. Plans is added as a destination with placeholder content; the runner
+arrives in Phase 2.
+
+### 1.5.1 — Replace top tabs with NavigationSplitView sidebar `next`
+Convert `ContentView`'s top tab bar to `NavigationSplitView` with a left sidebar.
+Initial sidebar = same 7 destinations as today (no destination removal yet).
+Pure structural change; no behavior changes. Sidebar items use SF Symbols + labels.
+
+### 1.5.2 — Add Freeplay destination, consolidate primitive entries `next`
+Create `FreeplayView.swift` listing every built primitive with launch buttons.
+Currently: Contour, Interval ID, Interval Playback. Future primitives auto-appear.
+Remove Contour / Intervals / Identify as direct sidebar items.
+Sidebar: Home / Tune / Freeplay / Progress / Settings (5 items, transient).
+Freeplay sessions log to confusion matrix but don't touch plan state.
+
+### 1.5.3 — Add Plans destination with placeholder library `next`
+Create `PlansView.swift` showing a card grid of bundled plan placeholders
+(`Beginner CI`, `Intermediate`). No real `.etplan` parsing yet — clicking a card
+shows a "coming in Phase 2" sheet. Sidebar reaches final shape:
+**Home / Tune / Plans / Freeplay / Progress / Settings**.
+
+### 1.5.4 — Rebuild Home as multi-mode launcher `next`
+Remove the Audie avatar branding header. Add stats row (4 cards), action grid
+(Drill My Misses / Freeplay / Browse Plans, plus Continue Plan placeholder),
+and recent sessions list. Two states: with-active-plan (Continue is primary)
+and no-active-plan (Drill My Misses is primary). See `DESIGN_SYSTEM.md` for layout.
+
+---
+
 ## Phase 2 — Lesson Architecture + New Primitives
 
 ### 2.0 — Adaptive difficulty engine `planned`
