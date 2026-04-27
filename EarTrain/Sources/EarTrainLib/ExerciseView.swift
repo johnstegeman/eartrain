@@ -258,8 +258,8 @@ public struct ExerciseView: View {
     private func resultColor(_ r: ExerciseResult) -> Color {
         switch r {
         case .correct:            return EarTrainColors.success
-        case .close:              return EarTrainColors.warning
-        case .octaveDisplaced:    return EarTrainColors.warning
+        case .close:              return EarTrainColors.accent
+        case .octaveDisplaced:    return EarTrainColors.accent
         case .wrong:              return EarTrainColors.error
         }
     }
@@ -271,6 +271,3 @@ public struct ExerciseView: View {
     }
 }
 
-private extension EarTrainColors {
-    static let warning = Color(hex: "#f5a623")
-}
