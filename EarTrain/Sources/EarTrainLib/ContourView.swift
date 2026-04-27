@@ -151,9 +151,12 @@ public struct ContourView: View {
                             .foregroundColor(EarTrainColors.accent)
                             .contentShape(Rectangle())
                             .onTapGesture {
+                                // Capture notes BEFORE replayAfterResult() sets phase=.playing
+                                let shouldReveal = vm.recordWrongReplay()
+                                let notes = vm.currentNoteNames
+                                let midi  = vm.currentNoteMidiPair
                                 vm.replayAfterResult()
-                                if vm.recordWrongReplay(), let notes = vm.currentNoteNames {
-                                    let midi = vm.currentNoteMidiPair
+                                if shouldReveal, let notes {
                                     companion.revealContourNotes(
                                         firstNote: notes.first,
                                         secondNote: notes.second,
