@@ -164,28 +164,6 @@ public final class ProgressStore: ObservableObject {
         stats.contour.values.contains { $0.values.contains { $0.total > 0 } }
     }
 
-    /// Total contour trials logged across all intervals and registers.
-    public var contourTotalTrials: Int {
-        contourIntervals.reduce(0) { $0 + (contourCounts(for: $1)?.total ?? 0) }
-    }
-
-    /// Overall contour accuracy across all intervals and registers. Nil if no data.
-    public var contourOverallAccuracy: Double? {
-        let pairs = contourIntervals.compactMap { contourCounts(for: $0) }
-        let total   = pairs.reduce(0) { $0 + $1.total }
-        let correct = pairs.reduce(0) { $0 + $1.correct }
-        guard total > 0 else { return nil }
-        return Double(correct) / Double(total)
-    }
-
-    /// Contour is mastered when the user has enough trials at strong accuracy.
-    /// Thresholds: ≥ 30 trials AND ≥ 75% accuracy.
-    /// Note: does not yet gate on difficulty level — difficulty-aware mastery
-    /// (requiring difficulty 5) will be added when LessonRunner ships (Phase 2).
-    public var hasContourMastery: Bool {
-        guard let acc = contourOverallAccuracy else { return false }
-        return contourTotalTrials >= 30 && acc >= 0.75
-    }
 
     /// Top N interval × register buckets ranked by error rate, requiring ≥ 5 trials each.
     /// Used on the End of Session screen to surface the biggest weak spots.
@@ -247,30 +225,28 @@ public final class ProgressStore: ObservableObject {
     /// once LessonRunner tracks per-trial difficulty.
     public var todayRecommendation: TodayRecommendation {
 
-        // ── Stage 1: Contour ──────────────────────────────────────────────────
-        // Stay here until mastered (≥ 30 trials, ≥ 75% accuracy).
-
-        if !hasContourMastery {
-            let n = contourTotalTrials
-            if n == 0 {
-                return TodayRecommendation(
-                    mode: .contour,
-                    headline: "Start with Contour",
-                    reason: "Hearing whether a note goes up or down is the foundation. Start here.",
-                    cta: "Begin"
-                )
-            }
-            let accStr = contourOverallAccuracy.map { "\(Int($0 * 100))% accuracy" } ?? "keep going"
-            let needed = max(0, 30 - n)
-            let progressNote = needed > 0
-                ? "\(n) trial\(n == 1 ? "" : "s") in, \(accStr). ~\(needed) more to reach mastery."
-                : "\(n) trials in, \(accStr). Push accuracy above 75% to advance."
+        // ── Stage 1: Contour — gated by MasteryEngine bucket analysis ─────────
+        let (masteryState, _) = MasteryEngine.evaluate()
+        switch masteryState {
+        case .notStarted:
+            return TodayRecommendation(
+                mode: .contour,
+                headline: "Start with Contour",
+                reason: "Hearing whether a note goes up or down is the foundation. Start here.",
+                cta: "Begin"
+            )
+        case .inProgress(let met, let required, let total):
+            let prompt = total >= MasterySettings.softAdvanceAt
+                ? " (advance option available)"
+                : ""
             return TodayRecommendation(
                 mode: .contour,
                 headline: "Keep Building Contour",
-                reason: progressNote,
+                reason: "\(met) of \(required) coverage buckets cleared\(prompt). Keep going.",
                 cta: "Continue"
             )
+        case .gateCleared, .advancedEarly:
+            break   // fall through to Stage 2
         }
 
         // ── Stage 2: Interval Identification ─────────────────────────────────
