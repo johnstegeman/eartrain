@@ -92,6 +92,8 @@ public struct ContentView: View {
             HomeView(store: session.progressStore, activeMode: $mode, selectedDuration: $sessionDuration)
         case .tuner:
             TunerView(audio: session.audio)
+        case .plans:
+            PlansView(activeMode: $mode)
         case .freeplay:
             FreeplayView(contourVM: session.contourVM, identVM: session.identVM,
                          exerciseVM: session.exerciseVM, store: session.progressStore,
@@ -130,6 +132,7 @@ public enum AppMode: CaseIterable {
     // Sidebar destinations
     case home
     case tuner
+    case plans
     case freeplay
     case progress
     case settings
@@ -140,15 +143,16 @@ public enum AppMode: CaseIterable {
     case intervals
     case identification
 
-    // Only the 5 sidebar destinations appear in the nav list.
+    // Only the 6 sidebar destinations appear in the nav list.
     public static var allCases: [AppMode] {
-        [.home, .tuner, .freeplay, .progress, .settings]
+        [.home, .tuner, .plans, .freeplay, .progress, .settings]
     }
 
     public var label: String {
         switch self {
         case .home:           return "Home"
         case .tuner:          return "Tune"
+        case .plans:          return "Plans"
         case .freeplay:       return "Freeplay"
         case .progress:       return "Progress"
         case .settings:       return "Settings"
@@ -162,6 +166,7 @@ public enum AppMode: CaseIterable {
         switch self {
         case .home:           return "house.fill"
         case .tuner:          return "tuningfork"
+        case .plans:          return "book.closed"
         case .freeplay:       return "square.grid.2x2"
         case .progress:       return "chart.bar.fill"
         case .settings:       return "gearshape.fill"
@@ -175,6 +180,7 @@ public enum AppMode: CaseIterable {
         switch self {
         case .home:           return ""
         case .tuner:          return "Check your tuning before you practice"
+        case .plans:          return "Browse and manage lesson plans"
         case .freeplay:       return "Pick any exercise to drill directly"
         case .progress:       return ""
         case .settings:       return ""
