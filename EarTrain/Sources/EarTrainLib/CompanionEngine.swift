@@ -403,7 +403,12 @@ public struct AudieChatPanel: View {
                 }
             }
             .frame(maxHeight: 160)
-            .background(EarTrainColors.surface)
+            .background(
+                ZStack {
+                    EarTrainColors.surface
+                    EarTrainColors.accent.opacity(0.07)
+                }
+            )
         }
     }
 }
