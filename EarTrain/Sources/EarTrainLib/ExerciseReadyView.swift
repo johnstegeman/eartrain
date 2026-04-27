@@ -42,9 +42,6 @@ struct ExerciseReadyView: View {
             // Icon + title + description
             VStack(spacing: 10) {
                 AudiePNGImage(size: 72)
-                Image(systemName: mode.icon)
-                    .font(.system(size: 44))
-                    .foregroundColor(EarTrainColors.accent)
                 Text(mode.label)
                     .font(.system(size: 26, weight: .bold))
                     .foregroundColor(EarTrainColors.textPrimary)
