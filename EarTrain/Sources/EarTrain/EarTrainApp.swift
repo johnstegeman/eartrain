@@ -13,6 +13,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate(ignoringOtherApps: true)
         setDockIcon()
+        // defaultSize is ignored when macOS restores saved window state.
+        // Enforce size explicitly and set a sane minimum so the window is freely resizable.
+        DispatchQueue.main.async {
+            guard let window = NSApp.windows.first else { return }
+            window.minSize = NSSize(width: 700, height: 500)
+            window.setContentSize(NSSize(width: 1000, height: 700))
+            window.center()
+        }
     }
 
     private func setDockIcon() {
@@ -29,6 +37,7 @@ struct EarTrainApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .frame(minWidth: 700, minHeight: 500)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.automatic)
