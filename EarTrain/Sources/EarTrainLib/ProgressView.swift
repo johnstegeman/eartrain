@@ -137,7 +137,7 @@ public struct ProgressView: View {
                             .fill(EarTrainColors.bg)
                             .frame(height: 8)
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(accuracyColor(c.accuracy))
+                            .fill(EarTrainColors.accuracy(c.accuracy))
                             .frame(width: geo.size.width * CGFloat(c.accuracy), height: 8)
                     }
                 }
@@ -145,7 +145,7 @@ public struct ProgressView: View {
 
                 Text("\(Int(c.accuracy * 100))%")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(accuracyColor(c.accuracy))
+                    .foregroundColor(EarTrainColors.accuracy(c.accuracy))
                     .frame(width: 36, alignment: .trailing)
 
                 Text("\(c.total)")
@@ -197,7 +197,7 @@ public struct ProgressView: View {
             if let acc = store.overallAccuracy {
                 statPill(label: "Overall",
                          value: "\(Int(acc * 100))%",
-                         color: accuracyColor(acc))
+                         color: EarTrainColors.accuracy(acc))
             }
             Spacer()
         }
@@ -319,7 +319,7 @@ public struct ProgressView: View {
         guard let acc = accuracy ?? nil else {
             return EarTrainColors.surface.opacity(0.6)  // no data
         }
-        return accuracyColor(acc).opacity(0.85)
+        return EarTrainColors.accuracy(acc).opacity(0.85)
     }
 
     // MARK: - Legend
@@ -346,11 +346,6 @@ public struct ProgressView: View {
 
     // MARK: - Helpers
 
-    private func accuracyColor(_ accuracy: Double) -> Color {
-        if accuracy >= 0.80 { return EarTrainColors.success }
-        if accuracy >= 0.50 { return EarTrainColors.accent }
-        return EarTrainColors.error
-    }
 }
 
 // MARK: - Cell identity (for sheet)
@@ -411,7 +406,7 @@ private struct DrillDownSheet: View {
                         let acc = Double(c.correct) / Double(c.total)
                         Text("\(Int(acc * 100))% (\(c.correct)/\(c.total))")
                             .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(accuracyColor(Double(c.correct) / Double(c.total)))
+                            .foregroundColor(EarTrainColors.accuracy(Double(c.correct) / Double(c.total)))
                     }
                     Spacer()
                 }
@@ -460,11 +455,6 @@ private struct DrillDownSheet: View {
         }
     }
 
-    private func accuracyColor(_ accuracy: Double) -> Color {
-        if accuracy >= 0.80 { return EarTrainColors.success }
-        if accuracy >= 0.50 { return EarTrainColors.accent }
-        return EarTrainColors.error
-    }
 }
 
 private extension EarTrainColors {

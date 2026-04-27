@@ -78,7 +78,7 @@ struct EndOfSessionView: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("\(Int(summary.accuracy * 100))%")
                     .font(.system(size: 52, weight: .black))
-                    .foregroundColor(accuracyColor(summary.accuracy))
+                    .foregroundColor(EarTrainColors.accuracy(summary.accuracy))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("accuracy")
                         .font(.system(size: 13))
@@ -173,11 +173,4 @@ struct EndOfSessionView: View {
         }
     }
 
-    // MARK: - Helpers
-
-    private func accuracyColor(_ accuracy: Double) -> Color {
-        if accuracy >= 0.80 { return EarTrainColors.success }
-        if accuracy >= 0.50 { return EarTrainColors.accent }
-        return EarTrainColors.error
-    }
 }

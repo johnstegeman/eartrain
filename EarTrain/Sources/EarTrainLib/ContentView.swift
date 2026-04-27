@@ -236,6 +236,10 @@ public enum EarTrainColors {
     public static let textPrimary   = Color(hex: "#e0e0e0")
     public static let textSecondary = Color(hex: "#888888")
     public static let textDisabled  = Color(hex: "#555555")
+
+    public static func accuracy(_ value: Double) -> Color {
+        value >= 0.80 ? success : value >= 0.50 ? accent : error
+    }
 }
 
 // MARK: - Button style

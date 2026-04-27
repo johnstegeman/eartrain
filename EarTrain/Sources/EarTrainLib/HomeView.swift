@@ -110,7 +110,7 @@ public struct HomeView: View {
             statPill(label: "Trials",   value: "\(store.stats.totalTrials)")
             if let acc = store.overallAccuracy {
                 statPill(label: "Accuracy", value: "\(Int(acc * 100))%",
-                         color: accuracyColor(acc))
+                         color: EarTrainColors.accuracy(acc))
             }
             Spacer()
         }
@@ -194,13 +194,6 @@ public struct HomeView: View {
         }
     }
 
-    // MARK: - Helpers
-
-    private func accuracyColor(_ accuracy: Double) -> Color {
-        if accuracy >= 0.80 { return EarTrainColors.success }
-        if accuracy >= 0.50 { return EarTrainColors.accent }
-        return EarTrainColors.error
-    }
 }
 
 // MARK: - Session Start Sheet
