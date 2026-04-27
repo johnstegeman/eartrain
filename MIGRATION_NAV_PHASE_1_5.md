@@ -1,5 +1,14 @@
 # Migration: Phase 1.5 — Navigation Refactor
 
+**Status: COMPLETE — landed 2026-04-27.**
+
+| Step | Commit |
+|---|---|
+| 1 — Sidebar replaces top tabs | `ca5d7ea` |
+| 2 — Freeplay destination, primitive consolidation | `5012c1a` |
+| 3 — Plans destination placeholder | `55d282d` |
+| 4 — Home rebuilt as launcher | `c472926` |
+
 **For the agent doing the work.** Read this entire document, then `DESIGN_SYSTEM.md`, then `LESSON_PRIMITIVES.md`, before touching any code. The plan below tells you what to change; `DESIGN_SYSTEM.md` is the authoritative spec for the target architecture.
 
 ---

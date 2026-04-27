@@ -1,6 +1,8 @@
 # TODOS
 
-## Navigation refactor (Phase 1.5)
+## ~~Navigation refactor (Phase 1.5)~~ DONE — see MIGRATION_NAV_PHASE_1_5.md
+
+
 
 **What:** Migrate the app from top-tab navigation to a `NavigationSplitView` sidebar with
 6 fixed destinations: Home / Tune / Plans / Freeplay / Progress / Settings.
