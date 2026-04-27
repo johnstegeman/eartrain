@@ -61,10 +61,11 @@ public struct ProgressView: View {
 
     private var streakSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("BEST STREAKS")
+            Text("Best Streaks")
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(0.8)
                 .foregroundColor(EarTrainColors.textSecondary)
+                .textCase(.uppercase)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 220))], spacing: 8) {
                 ForEach(store.allStreakRecords) { record in
