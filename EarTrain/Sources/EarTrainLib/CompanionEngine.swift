@@ -381,7 +381,7 @@ public struct AudieChatPanel: View {
     public var body: some View {
         if companion.messages.isEmpty { EmptyView() } else {
             VStack(spacing: 0) {
-                Divider().background(EarTrainColors.surface)
+                Divider().background(Color(hex: "#2d2d2d"))
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 10) {
@@ -403,7 +403,7 @@ public struct AudieChatPanel: View {
                 }
             }
             .frame(maxHeight: 160)
-            .background(EarTrainColors.bg)
+            .background(EarTrainColors.surface)
         }
     }
 }
