@@ -188,7 +188,7 @@ public struct HomeView: View {
 
             let eligible = store.hasDrillableData
             VStack(spacing: 4) {
-                Button("Drill My Misses") { activeMode = .intervals }
+                Button("Drill My Misses") { activeMode = .freeplay } // TODO step 4: route to specific drill session
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(eligible ? EarTrainColors.accent : EarTrainColors.textDisabled)
                     .buttonStyle(.plain)

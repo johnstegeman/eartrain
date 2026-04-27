@@ -92,6 +92,12 @@ public struct ContentView: View {
             HomeView(store: session.progressStore, activeMode: $mode, selectedDuration: $sessionDuration)
         case .tuner:
             TunerView(audio: session.audio)
+        case .freeplay:
+            FreeplayView(contourVM: session.contourVM, identVM: session.identVM,
+                         exerciseVM: session.exerciseVM, store: session.progressStore,
+                         audio: session.audio, companion: session.companion,
+                         activeMode: $mode, selectedDuration: $sessionDuration,
+                         mic: mic)
         case .intervals:
             if mic.isBlocked {
                 MicBlockedView(openSettings: mic.openSystemSettings)
@@ -121,23 +127,34 @@ public struct ContentView: View {
 // MARK: - App mode
 
 public enum AppMode: CaseIterable {
+    // Sidebar destinations
     case home
     case tuner
+    case freeplay
+    case progress
+    case settings
+    // Primitive modes — not sidebar items; reached via FreeplayView or direct routing.
+    // Kept as AppMode cases so exercise views, SessionEndSummary, and CompanionEngine
+    // can reference them without a separate type.
     case contour
     case intervals
     case identification
-    case progress
-    case settings
+
+    // Only the 5 sidebar destinations appear in the nav list.
+    public static var allCases: [AppMode] {
+        [.home, .tuner, .freeplay, .progress, .settings]
+    }
 
     public var label: String {
         switch self {
         case .home:           return "Home"
         case .tuner:          return "Tune"
+        case .freeplay:       return "Freeplay"
+        case .progress:       return "Progress"
+        case .settings:       return "Settings"
         case .intervals:      return "Intervals"
         case .contour:        return "Contour"
         case .identification: return "Identify"
-        case .progress:       return "Progress"
-        case .settings:       return "Settings"
         }
     }
 
@@ -145,11 +162,12 @@ public enum AppMode: CaseIterable {
         switch self {
         case .home:           return "house.fill"
         case .tuner:          return "tuningfork"
+        case .freeplay:       return "square.grid.2x2"
+        case .progress:       return "chart.bar.fill"
+        case .settings:       return "gearshape.fill"
         case .intervals:      return "guitars.fill"
         case .contour:        return "arrow.up.arrow.down"
         case .identification: return "ear.fill"
-        case .progress:       return "chart.bar.fill"
-        case .settings:       return "gearshape.fill"
         }
     }
 
@@ -157,11 +175,12 @@ public enum AppMode: CaseIterable {
         switch self {
         case .home:           return ""
         case .tuner:          return "Check your tuning before you practice"
+        case .freeplay:       return "Pick any exercise to drill directly"
+        case .progress:       return ""
+        case .settings:       return ""
         case .intervals:      return "Play back intervals on your guitar — mic grades your response"
         case .contour:        return "Higher, lower, or same? The simplest pitch discrimination exercise"
         case .identification: return "Hear an interval and identify it by ear only"
-        case .progress:       return ""
-        case .settings:       return ""
         }
     }
 }
