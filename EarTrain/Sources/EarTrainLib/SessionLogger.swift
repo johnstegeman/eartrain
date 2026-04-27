@@ -212,7 +212,7 @@ public final class SessionLogger {
 
     private func updateCumulative() {
         let url = baseURL.appendingPathComponent("cumulative.json")
-        var stats = (try? JSONDecoder().decode(CumulativeStats.self,
+        var stats = (try? SessionLogger.decoder.decode(CumulativeStats.self,
                                               from: Data(contentsOf: url)))
                     ?? CumulativeStats()
 
@@ -256,6 +256,12 @@ public final class SessionLogger {
         e.outputFormatting    = [.prettyPrinted, .sortedKeys]
         e.dateEncodingStrategy = .iso8601
         return e
+    }()
+
+    private static let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        return d
     }()
 }
 

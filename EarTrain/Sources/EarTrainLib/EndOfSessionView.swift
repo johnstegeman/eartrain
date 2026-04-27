@@ -133,7 +133,7 @@ struct EndOfSessionView: View {
                 .tracking(0.8)
                 .foregroundColor(EarTrainColors.textSecondary)
 
-            ForEach(buckets, id: \.intervalName) { bucket in
+            ForEach(Array(buckets.enumerated()), id: \.offset) { _, bucket in
                 HStack {
                     Text(bucket.intervalName)
                         .font(.system(size: 14, weight: .bold))

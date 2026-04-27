@@ -40,28 +40,25 @@ public struct ContentView: View {
 
     public var body: some View {
         Group {
-            if mic.isAuthorized && !session.companion.hasCompletedOnboarding {
+            if !session.companion.hasCompletedOnboarding {
                 OnboardingView(companion: session.companion)
-            } else if mic.isAuthorized {
+            } else {
                 VStack(spacing: 0) {
                     modePicker
                     Divider().background(EarTrainColors.surface)
                     modeContent
                 }
-            } else if mic.isBlocked {
-                MicBlockedView(openSettings: mic.openSystemSettings)
-            } else {
-                MicRequestView()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(EarTrainColors.bg)
         .task {
             await mic.requestIfNeeded()
-            if mic.isAuthorized { session.audio.start() }
+            // Engine can start without mic — tap is installed lazily per-exercise.
+            session.audio.start()
         }
-        .onChange(of: mic.isAuthorized) { authorized in
-            if authorized { session.audio.start() }
+        .onChange(of: mic.isAuthorized) { _ in
+            if !session.audio.isRunning { session.audio.start() }
         }
         .onAppear {
             // Wire companion's mode-switch action to this view's mode binding.
@@ -103,9 +100,15 @@ public struct ContentView: View {
         case .home:
             HomeView(store: session.progressStore, activeMode: $mode, selectedDuration: $sessionDuration)
         case .intervals:
-            ExerciseView(vm: session.exerciseVM, store: session.progressStore,
-                         audio: session.audio, companion: session.companion,
-                         activeMode: $mode, selectedDuration: $sessionDuration)
+            if mic.isBlocked {
+                MicBlockedView(openSettings: mic.openSystemSettings)
+            } else if !mic.isAuthorized {
+                MicRequestView()
+            } else {
+                ExerciseView(vm: session.exerciseVM, store: session.progressStore,
+                             audio: session.audio, companion: session.companion,
+                             activeMode: $mode, selectedDuration: $sessionDuration)
+            }
         case .contour:
             ContourView(vm: session.contourVM, store: session.progressStore,
                         audio: session.audio, companion: session.companion,
