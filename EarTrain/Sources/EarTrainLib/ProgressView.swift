@@ -411,24 +411,6 @@ private struct DrillDownSheet: View {
                     Spacer()
                 }
 
-                // Drill This placeholder
-                if c.total >= 5 {
-                    Text("Drill This")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(EarTrainColors.accent)
-                        .cornerRadius(6)
-                        .opacity(0.5)  // greyed — Drill My Misses not yet implemented
-                        .overlay(
-                            Text("Available in a future update")
-                                .font(.system(size: 10))
-                                .foregroundColor(EarTrainColors.textSecondary)
-                                .offset(y: 22)
-                        )
-                }
-
             } else {
                 Text("No trials recorded yet for this cell.\nPractice this interval in the \(cell.register.displayName) register to see data here.")
                     .font(.system(size: 13))
