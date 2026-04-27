@@ -132,6 +132,7 @@ public final class ContourViewModel: ObservableObject, DifficultyAdjustable {
     private var semitones: Int = 7
     /// Counts replays on the current wrong answer; resets on each new trial.
     private var wrongReplayCount: Int = 0
+    private let sampler = ContourSampler()
     private var currentTask: Task<Void, Never>?
     private var timerTask:   Task<Void, Never>?
     private var timerExpired = false
@@ -337,6 +338,7 @@ public final class ContourViewModel: ObservableObject, DifficultyAdjustable {
                                 direction: correctContour.directionKey, correct: correct,
                                 difficulty: difficultyLevel,
                                 note1Midi: n1, note2Midi: n2)
+        sampler.recordTrial()
         onResult?(correct)
 
         currentTask?.cancel()
@@ -364,24 +366,62 @@ public final class ContourViewModel: ObservableObject, DifficultyAdjustable {
         default:    contour = .same
         }
 
-        let semitones = pickSemitones()
+        // For "same" pairs use a fixed gap of 0 — sampler is only used for higher/lower
+        if contour == .same {
+            let rootMidi = pickRegisterRoot(in: 40...72)
+            let hz = midiToHz(rootMidi)
+            return (hz, hz, 0, .same)
+        }
 
+        // Use the weighted sampler for higher/lower pairs.
+        // The sampler returns (gap, lowerNoteMidi) — the lower of the two notes.
+        let gapRange  = semitoneRange(forDifficulty: difficultyLevel)
+        let midiRange: ClosedRange<Int>
+        if let focused = focusedRegisterBucket, focused < Self.registerBuckets.count {
+            let b = Self.registerBuckets[focused]
+            midiRange = max(40, b.lo)...min(70, b.hi)
+        } else {
+            midiRange = 40...70
+        }
+        let (gap, lowerMidi) = sampler.sample(availableGapRange: gapRange,
+                                               availableMidiRange: midiRange)
+
+        // Derive root and second based on contour direction
         let rootMidi: Int
         switch contour {
-        case .higher: rootMidi = pickRegisterRoot(in: 40...max(40, 81 - semitones))
-        case .lower:  rootMidi = pickRegisterRoot(in: min(72, 40 + semitones)...72)
-        case .same:   rootMidi = pickRegisterRoot(in: 40...72)
+        case .higher: rootMidi = lowerMidi               // root is lower; second is higher
+        case .lower:  rootMidi = min(lowerMidi + gap, 81) // root is higher; second is lower
+        case .same:   rootMidi = lowerMidi                // handled above but kept for exhaustiveness
+        }
+
+        // Track register for CompanionEngine
+        let buckets = Self.registerBuckets
+        if let idx = buckets.indices.first(where: { rootMidi >= buckets[$0].lo && rootMidi <= buckets[$0].hi }) {
+            lastRegisterBucket = idx
+            registerTrialCounts[idx] += 1
         }
 
         let rootHz = midiToHz(rootMidi)
         let secondHz: Float
         switch contour {
-        case .higher: secondHz = midiToHz(rootMidi + semitones)
-        case .lower:  secondHz = midiToHz(rootMidi - semitones)
+        case .higher: secondHz = midiToHz(rootMidi + gap)
+        case .lower:  secondHz = midiToHz(rootMidi - gap)
         case .same:   secondHz = rootHz
         }
 
-        return (rootHz, secondHz, semitones, contour)
+        return (rootHz, secondHz, gap, contour)
+    }
+
+    /// The gap range available at a given difficulty level.
+    /// This gives the sampler the correct search space while keeping difficulty semantics.
+    private func semitoneRange(forDifficulty level: Int) -> ClosedRange<Int> {
+        switch level {
+        case 1:  return 6...16
+        case 2:  return 4...14
+        case 3:  return 2...11
+        case 4:  return 1...7
+        default: return 1...3
+        }
     }
 
     /// Picks a root MIDI note from `allowedRange`, weighted toward whichever register
