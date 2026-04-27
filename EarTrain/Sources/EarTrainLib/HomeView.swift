@@ -13,6 +13,7 @@ public struct HomeView: View {
     @ObservedObject var store: ProgressStore
     @Binding var activeMode: AppMode
     @Binding var selectedDuration: SessionDuration
+    @State private var masteryState: MasteryEngine.ContourMasteryState = .notStarted
 
     public init(store: ProgressStore, activeMode: Binding<AppMode>, selectedDuration: Binding<SessionDuration>) {
         self.store = store
@@ -23,6 +24,9 @@ public struct HomeView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             todaysFocusCard
+            if case .advancedEarly = masteryState {
+                contourInProgressCard
+            }
             if store.stats.totalSessions > 0 || store.hasContourData {
                 statsRow
             } else {
@@ -35,7 +39,13 @@ public struct HomeView: View {
         .frame(maxWidth: 600)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(EarTrainColors.bg)
-        .onAppear { store.reload() }
+        .onAppear {
+            store.reload()
+            masteryState = MasteryEngine.evaluate().state
+        }
+        .onReceive(store.objectWillChange) {
+            masteryState = MasteryEngine.evaluate().state
+        }
     }
 
     // MARK: - Today's Focus
@@ -69,9 +79,24 @@ public struct HomeView: View {
                 .foregroundColor(EarTrainColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button(rec.cta) { activeMode = rec.mode }
-                .buttonStyle(AccentButtonStyle())
-                .padding(.top, 4)
+            HStack(alignment: .center, spacing: 16) {
+                Button(rec.cta) { activeMode = rec.mode }
+                    .buttonStyle(AccentButtonStyle())
+                    .padding(.top, 4)
+
+                // Soft-advance: show after softAdvanceAt trials without clearing the gate
+                if case .inProgress(_, _, let total) = masteryState,
+                   total >= MasterySettings.softAdvanceAt {
+                    Button("This is hard — advance anyway?") {
+                        AudieDatabase.shared.setAppState("true", forKey: "contour_advanced_early")
+                        store.reload()
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(EarTrainColors.textDisabled)
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+                }
+            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -81,6 +106,36 @@ public struct HomeView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(EarTrainColors.accent.opacity(0.25), lineWidth: 1.5)
         )
+    }
+
+    // MARK: - Contour in-progress card (shown when user advanced early)
+
+    private var contourInProgressCard: some View {
+        Button { activeMode = .freeplay } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 16))
+                    .foregroundColor(EarTrainColors.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Contour — still in progress")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(EarTrainColors.textPrimary)
+                    Text("Advanced early. Tap to return and keep working.")
+                        .font(.system(size: 11))
+                        .foregroundColor(EarTrainColors.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(EarTrainColors.textDisabled)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(14)
+        .background(EarTrainColors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Stats
