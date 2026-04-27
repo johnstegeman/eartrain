@@ -197,9 +197,18 @@ public final class CompanionEngine: ObservableObject {
         let atMaxDifficulty = level >= 5
         let accuracyAtLevel = trialsAtLevel > 0
             ? Double(correctAtLevel) / Double(trialsAtLevel) : 0
-        let readyToRaise = consecutiveCorrect >= 8
-            && trialsAtLevel >= 20
-            && accuracyAtLevel >= 0.75
+        // Use MasterySettings thresholds so raise-difficulty and gate-clearance
+        // are the same ladder: you earn each level with the same accuracy standard
+        // required to eventually clear the mastery gate.
+        let window = MasterySettings.recencyWindow
+        let threshold = MasterySettings.accuracyThreshold
+        let belowMinDiff = level < MasterySettings.minDifficulty
+        // Below the required difficulty, be more eager to suggest raising (streak of 5).
+        // At or above, use a higher bar (streak of 8) since it's optional growth.
+        let streakNeeded = belowMinDiff ? 5 : 8
+        let readyToRaise = consecutiveCorrect >= streakNeeded
+            && trialsAtLevel >= window
+            && accuracyAtLevel >= threshold
 
         if readyToRaise && !hasOfferedRaiseDifficulty {
             trialsSinceLastMessage = 0
