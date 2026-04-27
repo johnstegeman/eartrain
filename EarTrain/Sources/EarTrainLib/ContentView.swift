@@ -103,6 +103,7 @@ public struct ContentView: View {
                     .background(mode == m ? EarTrainColors.accent.opacity(0.15) : Color.clear)
                     .foregroundColor(mode == m ? EarTrainColors.accent : EarTrainColors.textSecondary)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -126,6 +127,7 @@ public struct ContentView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .foregroundColor(EarTrainColors.textSecondary)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
