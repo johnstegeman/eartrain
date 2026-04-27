@@ -282,6 +282,15 @@ public final class ContourViewModel: ObservableObject, DifficultyAdjustable {
                 NoteConverter.name(fromHz: secondHz))
     }
 
+    /// Human-readable direction of the current pair based on playback order.
+    public var currentDirectionText: String {
+        switch correctContour {
+        case .higher: return "higher"
+        case .lower:  return "lower"
+        case .same:   return "the same"
+        }
+    }
+
     /// MIDI numbers of the current pair, lower note first. Used for flagging.
     public var currentNoteMidiPair: (note1: Int, note2: Int) {
         (NoteConverter.midiNote(fromHz: min(rootHz, secondHz)),

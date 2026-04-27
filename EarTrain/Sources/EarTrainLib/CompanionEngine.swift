@@ -226,8 +226,8 @@ public final class CompanionEngine: ObservableObject {
     /// Called when the user has replayed a wrong contour answer multiple times.
     /// Names the two notes and offers a "Flag as tricky" action.
     public func revealContourNotes(firstNote: String, secondNote: String,
+                                   direction: String,
                                    note1Midi: Int, note2Midi: Int) {
-        let direction = note1Midi < note2Midi ? "higher" : "lower"
         let text = "That was \(firstNote) → \(secondNote). The second note is \(direction)."
         addMessage(text, action: .flagPair(note1: note1Midi, note2: note2Midi),
                    actionLabel: "Flag as tricky")

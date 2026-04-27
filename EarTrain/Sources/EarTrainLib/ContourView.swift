@@ -153,13 +153,15 @@ public struct ContourView: View {
                             .onTapGesture {
                                 // Capture notes BEFORE replayAfterResult() sets phase=.playing
                                 let shouldReveal = vm.recordWrongReplay()
-                                let notes = vm.currentNoteNames
-                                let midi  = vm.currentNoteMidiPair
+                                let notes     = vm.currentNoteNames
+                                let direction = vm.currentDirectionText
+                                let midi      = vm.currentNoteMidiPair
                                 vm.replayAfterResult()
                                 if shouldReveal, let notes {
                                     companion.revealContourNotes(
                                         firstNote: notes.first,
                                         secondNote: notes.second,
+                                        direction: direction,
                                         note1Midi: midi.note1,
                                         note2Midi: midi.note2
                                     )
