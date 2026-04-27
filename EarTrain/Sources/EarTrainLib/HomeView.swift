@@ -186,11 +186,18 @@ public struct HomeView: View {
                 .buttonStyle(AccentButtonStyle())
 
             let eligible = store.hasDrillableData
-            Text(eligible ? "Drill My Misses" : "Drill My Misses (need more data)")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(eligible ? EarTrainColors.accent : EarTrainColors.textDisabled)
-                .contentShape(Rectangle())
-                .onTapGesture { if eligible { activeMode = .intervals } }
+            VStack(spacing: 4) {
+                Text("Drill My Misses")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(eligible ? EarTrainColors.accent : EarTrainColors.textDisabled)
+                    .contentShape(Rectangle())
+                    .onTapGesture { if eligible { activeMode = .intervals } }
+                if !eligible {
+                    Text("Practice a few sessions first")
+                        .font(.system(size: 11))
+                        .foregroundColor(EarTrainColors.textDisabled)
+                }
+            }
         }
     }
 
