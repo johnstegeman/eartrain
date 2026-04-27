@@ -33,10 +33,15 @@ public struct ContourView: View {
             } else {
                 VStack(spacing: 0) {
                     endSessionBar
-                    VStack(spacing: 32) {
+                    VStack(spacing: 0) {
                         scorePanel
-                        statusPanel
-                        answerButtons
+                            .padding(.top, 8)
+                        Spacer(minLength: 20)
+                        VStack(spacing: 28) {
+                            statusPanel
+                            answerButtons
+                        }
+                        Spacer(minLength: 20)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }

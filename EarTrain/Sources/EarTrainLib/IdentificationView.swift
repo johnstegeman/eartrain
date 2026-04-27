@@ -33,11 +33,16 @@ public struct IdentificationView: View {
             } else {
                 VStack(spacing: 0) {
                     endSessionBar
-                    VStack(spacing: 28) {
+                    VStack(spacing: 0) {
                         scorePanel
-                        teachPanel
-                        statusPanel
-                        answerButtons
+                            .padding(.top, 8)
+                        Spacer(minLength: 20)
+                        VStack(spacing: 24) {
+                            teachPanel
+                            statusPanel
+                            answerButtons
+                        }
+                        Spacer(minLength: 20)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }

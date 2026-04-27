@@ -33,10 +33,14 @@ public struct ExerciseView: View {
             } else {
                 VStack(spacing: 0) {
                     endSessionBar
-                    VStack(spacing: 32) {
-                        intervalDisplay
-                        statusPanel
-                        controls
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 20)
+                        VStack(spacing: 28) {
+                            intervalDisplay
+                            statusPanel
+                            controls
+                        }
+                        Spacer(minLength: 20)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
