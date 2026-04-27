@@ -43,12 +43,13 @@ public struct ContentView: View {
             if !session.companion.hasCompletedOnboarding {
                 OnboardingView(companion: session.companion)
             } else {
-                NavigationSplitView {
-                    sidebarList
-                } detail: {
+                HStack(spacing: 0) {
+                    sidebar
+                    Divider()
+                        .background(Color(hex: "#2d2d2d"))
                     modeContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .navigationSplitViewStyle(.balanced)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -73,16 +74,35 @@ public struct ContentView: View {
         }
     }
 
-    private var sidebarList: some View {
-        List(selection: $mode) {
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 2) {
             ForEach(AppMode.allCases, id: \.self) { m in
-                Label(m.label, systemImage: m.icon)
-                    .tag(m)
+                Button {
+                    mode = m
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: m.icon)
+                            .font(.system(size: 14))
+                            .frame(width: 18, alignment: .center)
+                        Text(m.label)
+                            .font(.system(size: 13, weight: mode == m ? .semibold : .regular))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(mode == m ? EarTrainColors.accent.opacity(0.15) : Color.clear)
+                    .foregroundColor(mode == m ? EarTrainColors.accent : EarTrainColors.textSecondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
             }
+            Spacer()
         }
-        .listStyle(.sidebar)
-        .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
-        .background(EarTrainColors.bg)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 12)
+        .frame(width: 200)
+        .frame(maxHeight: .infinity)
+        .background(EarTrainColors.surface)
     }
 
     @ViewBuilder
