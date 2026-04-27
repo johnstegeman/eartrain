@@ -434,7 +434,7 @@ private struct AudieBubble: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(EarTrainColors.accent)
-                        .cornerRadius(5)
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
                         .contentShape(Rectangle())
                         .onTapGesture { onAction() }
                 }
@@ -442,7 +442,7 @@ private struct AudieBubble: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(EarTrainColors.surface)
-            .cornerRadius(12)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
             .frame(maxWidth: 340, alignment: .leading)
         }
     }

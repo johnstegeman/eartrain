@@ -122,7 +122,7 @@ public struct IdentificationView: View {
         }
         .padding(24)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .animation(.easeInOut(duration: 0.2), value: phaseIsTeaching)
     }
 
@@ -180,7 +180,7 @@ public struct IdentificationView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background((correct ? EarTrainColors.success : EarTrainColors.error).opacity(0.12))
-        .cornerRadius(10)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Yes / No buttons

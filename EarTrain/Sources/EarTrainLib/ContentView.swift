@@ -82,13 +82,13 @@ public struct ContentView: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
                     .background(selected ? EarTrainColors.accent : Color.clear)
-                    .cornerRadius(6)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                     .buttonStyle(.plain)
             }
         }
         .padding(4)
         .background(EarTrainColors.surface)
-        .cornerRadius(8)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .padding(.horizontal, 24)
         .padding(.vertical, 10)
     }
@@ -246,7 +246,7 @@ public struct AccentButtonStyle: ButtonStyle {
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
             .background(EarTrainColors.accent.opacity(!isEnabled ? 0.5 : configuration.isPressed ? 0.8 : 1))
-            .cornerRadius(6)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 

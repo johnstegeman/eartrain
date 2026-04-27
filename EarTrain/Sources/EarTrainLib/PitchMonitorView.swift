@@ -55,7 +55,7 @@ public struct PitchMonitorView: View {
         .frame(minWidth: 200)
         .padding(32)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var amplitudeBar: some View {
@@ -137,6 +137,6 @@ public struct PitchMonitorView: View {
         .foregroundColor(EarTrainColors.error)
         .padding(12)
         .background(EarTrainColors.surface)
-        .cornerRadius(8)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }

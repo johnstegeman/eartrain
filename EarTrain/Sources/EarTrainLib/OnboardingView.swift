@@ -40,7 +40,7 @@ struct OnboardingView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(EarTrainColors.surface)
-                    .cornerRadius(8)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                     .frame(maxWidth: 260)
                     .focused($fieldFocused)
                     .onSubmit { finish() }

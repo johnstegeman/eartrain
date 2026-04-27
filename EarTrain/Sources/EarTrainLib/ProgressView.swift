@@ -96,7 +96,7 @@ public struct ProgressView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(EarTrainColors.surface)
-                    .cornerRadius(10)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
         }
@@ -118,7 +118,7 @@ public struct ProgressView: View {
         }
         .padding(16)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func contourIntervalRow(_ intervalName: String) -> some View {
@@ -218,7 +218,7 @@ public struct ProgressView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(EarTrainColors.surface)
-        .cornerRadius(10)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Heatmap
@@ -252,7 +252,7 @@ public struct ProgressView: View {
         }
         .padding(16)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func intervalRow(_ interval: Interval) -> some View {
@@ -311,7 +311,7 @@ public struct ProgressView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 52)
             .background(cellBackground(accuracy: hasData ? accuracy : nil))
-            .cornerRadius(8)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
     }

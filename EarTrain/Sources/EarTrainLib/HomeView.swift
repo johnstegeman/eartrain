@@ -91,7 +91,7 @@ public struct HomeView: View {
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(
@@ -130,7 +130,7 @@ public struct HomeView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(EarTrainColors.surface)
-        .cornerRadius(10)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Mode cards (quick shortcuts)
@@ -176,7 +176,7 @@ public struct HomeView: View {
         .buttonStyle(.plain)
         .padding(14)
         .background(EarTrainColors.surface)
-        .cornerRadius(10)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - CTAs
@@ -262,7 +262,7 @@ private struct SessionStartSheet: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(selected ? EarTrainColors.accent : EarTrainColors.surface)
-            .cornerRadius(8)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .buttonStyle(.plain)
     }
 
@@ -309,7 +309,7 @@ private struct SessionStartSheet: View {
         .buttonStyle(.plain)
         .padding(12)
         .background(selected ? EarTrainColors.accent.opacity(0.08) : EarTrainColors.surface)
-        .cornerRadius(8)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(selected ? EarTrainColors.accent.opacity(0.4) : Color.clear,

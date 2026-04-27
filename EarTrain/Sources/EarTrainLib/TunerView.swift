@@ -111,7 +111,7 @@ public struct TunerView: View {
         .frame(maxWidth: .infinity)
         .padding(32)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Gauge card
@@ -141,7 +141,7 @@ public struct TunerView: View {
         }
         .padding(24)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Level card
@@ -167,7 +167,7 @@ public struct TunerView: View {
         }
         .padding(20)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var levelBarColor: Color {
@@ -208,7 +208,7 @@ private struct TunerNeedle: View {
                 // Color track
                 Self.zoneGradient
                     .frame(height: 12)
-                    .cornerRadius(6)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
 
                 // Center tick
                 Rectangle()

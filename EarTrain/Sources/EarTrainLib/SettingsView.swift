@@ -62,7 +62,7 @@ public struct SettingsView: View {
                 )
             }
             .background(EarTrainColors.surface)
-            .cornerRadius(8)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
 
             if audio.isRunning {
                 Label("Engine running — changing device restarts audio briefly.",
@@ -183,7 +183,7 @@ public struct SettingsView: View {
                 .padding(.vertical, 12)
             }
             .background(EarTrainColors.surface)
-            .cornerRadius(8)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 
@@ -231,7 +231,7 @@ private struct TimbreRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(isSelected ? EarTrainColors.accent : EarTrainColors.surface)
-        .cornerRadius(8)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
     }

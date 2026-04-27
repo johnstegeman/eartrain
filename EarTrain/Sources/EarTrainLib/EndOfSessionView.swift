@@ -106,7 +106,7 @@ struct EndOfSessionView: View {
         }
         .padding(16)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func statItem(label: String, value: String,
@@ -150,7 +150,7 @@ struct EndOfSessionView: View {
                 .padding(.vertical, 6)
                 .padding(.horizontal, 12)
                 .background(EarTrainColors.surface)
-                .cornerRadius(8)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
     }

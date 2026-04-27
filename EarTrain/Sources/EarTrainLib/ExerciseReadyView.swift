@@ -85,7 +85,7 @@ struct ExerciseReadyView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(selected ? EarTrainColors.accent : EarTrainColors.surface)
-            .cornerRadius(8)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .buttonStyle(.plain)
     }
 }
@@ -210,7 +210,7 @@ struct ExerciseSessionBar: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .background(EarTrainColors.surface)
-                .cornerRadius(6)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)

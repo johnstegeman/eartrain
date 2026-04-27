@@ -105,7 +105,7 @@ public struct ExerciseView: View {
         }
         .padding(32)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var rootLabel: String {
@@ -199,7 +199,7 @@ public struct ExerciseView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(resultColor(result).opacity(0.12))
-        .cornerRadius(10)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Controls
