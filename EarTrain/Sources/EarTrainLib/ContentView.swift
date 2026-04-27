@@ -10,7 +10,7 @@ final class AppSession: ObservableObject {
     let contourVM: ContourViewModel
     let identVM: IdentificationViewModel
     let exerciseVM: ExerciseViewModel
-    let progressStore = ProgressStore()
+    let progressStore = ProgressStore(database: .shared)
 
     private var cancellable: AnyCancellable?
 

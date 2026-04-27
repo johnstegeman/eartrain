@@ -188,7 +188,7 @@ public final class ContourViewModel: ObservableObject, DifficultyAdjustable {
     /// Begin a new session. `duration` starts the countdown timer if not `.open`.
     public func beginSession(duration: SessionDuration = .open) {
         logger?.endSession()
-        logger = SessionLogger(mode: "contour")
+        logger = SessionLogger(primitive: "contour")
         sessionStartDate = Date()
         totalTrials   = 0
         correctTrials = 0
@@ -296,8 +296,12 @@ public final class ContourViewModel: ObservableObject, DifficultyAdjustable {
         totalTrials  += 1
         if correct { correctTrials += 1 }
         phase = .result(correct: correct, correctAnswer: correctContour)
+        let n1 = NoteConverter.midiNote(fromHz: min(rootHz, secondHz))
+        let n2 = NoteConverter.midiNote(fromHz: max(rootHz, secondHz))
         logger?.logContourTrial(rootHz: rootHz, semitones: semitones,
-                                direction: correctContour.directionKey, correct: correct)
+                                direction: correctContour.directionKey, correct: correct,
+                                difficulty: difficultyLevel,
+                                note1Midi: n1, note2Midi: n2)
         onResult?(correct)
 
         currentTask?.cancel()

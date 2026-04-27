@@ -102,7 +102,7 @@ public final class ExerciseViewModel: ObservableObject, DifficultyAdjustable {
     // MARK: - Session lifecycle
 
     public func beginSession(duration: SessionDuration = .open) {
-        logger = SessionLogger(mode: "intervals")
+        logger = SessionLogger(primitive: "interval-playback")
         audio.enableMicTap()
         sessionStartDate = Date()
         totalTrials   = 0
@@ -187,7 +187,8 @@ public final class ExerciseViewModel: ObservableObject, DifficultyAdjustable {
 
             guard let detectedRoot = await self.waitForStableNote() else {
                 guard !Task.isCancelled else { return }
-                self.logger?.logNoRead(interval: interval, rootHz: self.rootHz)
+                self.logger?.logNoRead(interval: interval, rootHz: self.rootHz,
+                                       difficulty: self.difficultyLevel)
                 self.phase = .noRead
                 self.totalTrials += 1
                 return
@@ -200,7 +201,8 @@ public final class ExerciseViewModel: ObservableObject, DifficultyAdjustable {
 
             guard let detectedInterval = await self.waitForStableNote() else {
                 guard !Task.isCancelled else { return }
-                self.logger?.logNoRead(interval: interval, rootHz: detectedRoot)
+                self.logger?.logNoRead(interval: interval, rootHz: detectedRoot,
+                                       difficulty: self.difficultyLevel)
                 self.phase = .noRead
                 self.totalTrials += 1
                 return
@@ -220,7 +222,8 @@ public final class ExerciseViewModel: ObservableObject, DifficultyAdjustable {
             self.logger?.logTrial(interval: interval,
                                    rootHz: detectedRoot,
                                    detectedHz: detectedInterval,
-                                   result: result)
+                                   result: result,
+                                   difficulty: self.difficultyLevel)
             self.phase = .result(result)
             self.totalTrials += 1
             let correct: Bool
