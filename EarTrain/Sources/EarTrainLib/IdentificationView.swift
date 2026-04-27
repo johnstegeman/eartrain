@@ -169,15 +169,8 @@ public struct IdentificationView: View {
                     Text("Is this a \(vm.focusInterval.displayName)?")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(EarTrainColors.textPrimary)
-                    Text("Replay")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(EarTrainColors.accent)
-                        .cornerRadius(6)
-                        .contentShape(Rectangle())
-                        .onTapGesture { vm.replayQuiz() }
+                    Button("Replay") { vm.replayQuiz() }
+                        .buttonStyle(AccentButtonStyle())
                 }
             case .result(let correct, let wasTarget, let actual):
                 resultBadge(correct: correct, wasTarget: wasTarget, actual: actual)
@@ -238,14 +231,17 @@ public struct IdentificationView: View {
 
     private func answerButton(label: String, icon: String, enabled: Bool,
                                action: @escaping () -> Void) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 22, weight: .semibold))
-            Text(label)
-                .font(.system(size: 15, weight: .semibold))
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 15, weight: .semibold))
+            }
         }
         .frame(width: 90, height: 72)
         .foregroundColor(EarTrainColors.textPrimary)
+        .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(EarTrainColors.surface)
@@ -255,8 +251,7 @@ public struct IdentificationView: View {
                 )
         )
         .opacity(enabled ? 1 : 0.4)
-        .contentShape(Rectangle())
-        .onTapGesture { if enabled { action() } }
+        .disabled(!enabled)
     }
 
     private func formatTime(_ seconds: Int) -> String {

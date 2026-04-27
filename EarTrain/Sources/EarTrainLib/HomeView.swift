@@ -150,32 +150,33 @@ public struct HomeView: View {
     }
 
     private func modeCard(_ mode: AppMode) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: mode.icon)
-                .font(.system(size: 18))
-                .foregroundColor(EarTrainColors.accent)
-                .frame(width: 28)
+        Button { activeMode = mode } label: {
+            HStack(spacing: 14) {
+                Image(systemName: mode.icon)
+                    .font(.system(size: 18))
+                    .foregroundColor(EarTrainColors.accent)
+                    .frame(width: 28)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(mode.label)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(EarTrainColors.textPrimary)
-                Text(mode.exerciseDescription)
-                    .font(.system(size: 11))
-                    .foregroundColor(EarTrainColors.textSecondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(mode.label)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(EarTrainColors.textPrimary)
+                    Text(mode.exerciseDescription)
+                        .font(.system(size: 11))
+                        .foregroundColor(EarTrainColors.textSecondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(EarTrainColors.textDisabled)
             }
-
-            Spacer()
-
-            Image(systemName: "arrow.right")
-                .font(.system(size: 12))
-                .foregroundColor(EarTrainColors.textDisabled)
         }
+        .buttonStyle(.plain)
         .padding(14)
         .background(EarTrainColors.surface)
         .cornerRadius(10)
-        .contentShape(Rectangle())
-        .onTapGesture { activeMode = mode }
     }
 
     // MARK: - CTAs
@@ -187,11 +188,11 @@ public struct HomeView: View {
 
             let eligible = store.hasDrillableData
             VStack(spacing: 4) {
-                Text("Drill My Misses")
+                Button("Drill My Misses") { activeMode = .intervals }
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(eligible ? EarTrainColors.accent : EarTrainColors.textDisabled)
-                    .contentShape(Rectangle())
-                    .onTapGesture { if eligible { activeMode = .intervals } }
+                    .buttonStyle(.plain)
+                    .disabled(!eligible)
                 if !eligible {
                     Text("Practice a few sessions first")
                         .font(.system(size: 11))
@@ -254,7 +255,7 @@ private struct SessionStartSheet: View {
 
     private func durationPill(_ duration: SessionDuration) -> some View {
         let selected = selectedDuration == duration
-        return Text(duration.label)
+        return Button(duration.label) { selectedDuration = duration }
             .font(.system(size: 13, weight: selected ? .semibold : .regular))
             .lineLimit(1)
             .foregroundColor(selected ? .black : EarTrainColors.textPrimary)
@@ -262,8 +263,7 @@ private struct SessionStartSheet: View {
             .padding(.vertical, 8)
             .background(selected ? EarTrainColors.accent : EarTrainColors.surface)
             .cornerRadius(8)
-            .contentShape(Rectangle())
-            .onTapGesture { selectedDuration = duration }
+            .buttonStyle(.plain)
     }
 
     // MARK: - Mode
@@ -281,29 +281,32 @@ private struct SessionStartSheet: View {
 
     private func modeRow(_ mode: AppMode) -> some View {
         let selected = selectedMode == mode
-        return HStack(spacing: 12) {
-            Image(systemName: mode.icon)
-                .font(.system(size: 15))
-                .foregroundColor(selected ? EarTrainColors.accent : EarTrainColors.textSecondary)
-                .frame(width: 22)
+        return Button { selectedMode = mode } label: {
+            HStack(spacing: 12) {
+                Image(systemName: mode.icon)
+                    .font(.system(size: 15))
+                    .foregroundColor(selected ? EarTrainColors.accent : EarTrainColors.textSecondary)
+                    .frame(width: 22)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(mode.label)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(EarTrainColors.textPrimary)
-                Text(mode.exerciseDescription)
-                    .font(.system(size: 11))
-                    .foregroundColor(EarTrainColors.textSecondary)
-            }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(mode.label)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(EarTrainColors.textPrimary)
+                    Text(mode.exerciseDescription)
+                        .font(.system(size: 11))
+                        .foregroundColor(EarTrainColors.textSecondary)
+                }
 
-            Spacer()
+                Spacer()
 
-            if selected {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(EarTrainColors.accent)
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(EarTrainColors.accent)
+                }
             }
         }
+        .buttonStyle(.plain)
         .padding(12)
         .background(selected ? EarTrainColors.accent.opacity(0.08) : EarTrainColors.surface)
         .cornerRadius(8)
@@ -312,8 +315,6 @@ private struct SessionStartSheet: View {
                 .stroke(selected ? EarTrainColors.accent.opacity(0.4) : Color.clear,
                         lineWidth: 1.5)
         )
-        .contentShape(Rectangle())
-        .onTapGesture { selectedMode = mode }
     }
 
     // MARK: - Start

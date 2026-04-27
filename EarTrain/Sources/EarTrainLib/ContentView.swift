@@ -76,15 +76,14 @@ public struct ContentView: View {
         HStack(spacing: 0) {
             ForEach(AppMode.allCases, id: \.self) { m in
                 let selected = mode == m
-                Text(m.label)
+                Button(m.label) { mode = m }
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
                     .foregroundColor(selected ? .black : EarTrainColors.textSecondary)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
                     .background(selected ? EarTrainColors.accent : Color.clear)
                     .cornerRadius(6)
-                    .contentShape(Rectangle())
-                    .onTapGesture { mode = m }
+                    .buttonStyle(.plain)
             }
         }
         .padding(4)
@@ -211,15 +210,8 @@ private struct MicBlockedView: View {
                 .foregroundColor(EarTrainColors.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 320)
-            Text("Open System Settings")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.black)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(EarTrainColors.accent)
-                .cornerRadius(6)
-                .contentShape(Rectangle())
-                .onTapGesture { openSettings() }
+            Button("Open System Settings") { openSettings() }
+                .buttonStyle(AccentButtonStyle())
         }
     }
 }
@@ -245,6 +237,7 @@ public enum EarTrainColors {
 // MARK: - Button style
 
 public struct AccentButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
     public init() {}
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -252,7 +245,7 @@ public struct AccentButtonStyle: ButtonStyle {
             .foregroundColor(.black)
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
-            .background(EarTrainColors.accent.opacity(configuration.isPressed ? 0.8 : 1))
+            .background(EarTrainColors.accent.opacity(!isEnabled ? 0.5 : configuration.isPressed ? 0.8 : 1))
             .cornerRadius(6)
     }
 }

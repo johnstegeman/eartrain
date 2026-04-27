@@ -148,15 +148,8 @@ public struct ContourView: View {
                     Text("Was the second note…")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(EarTrainColors.textPrimary)
-                    Text("Replay")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(EarTrainColors.accent)
-                        .cornerRadius(6)
-                        .contentShape(Rectangle())
-                        .onTapGesture { vm.replayPair() }
+                    Button("Replay") { vm.replayPair() }
+                        .buttonStyle(AccentButtonStyle())
                 }
                 .transition(.opacity)
             case .result(let correct, let answer):
@@ -214,14 +207,26 @@ public struct ContourView: View {
     }
 
     private func contourButton(_ contour: ContourViewModel.Contour, disabled: Bool) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: contour.icon)
-                .font(.system(size: 22))
-            Text(contour.label)
-                .font(.system(size: 14, weight: .semibold))
+        Button {
+            vm.answer(contour) { correct in
+                let context = TrialContext(areaName: vm.currentRegisterName)
+                companion.recordOutcome(correct: correct, context: context)
+                let isNewBest = store.updateStreakIfRecord(modeKey: "contour",
+                                                          difficulty: vm.difficultyLevel,
+                                                          streak: companion.currentStreak)
+                if isNewBest { companion.announcePersonalBest(streak: companion.currentStreak) }
+            }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: contour.icon)
+                    .font(.system(size: 22))
+                Text(contour.label)
+                    .font(.system(size: 14, weight: .semibold))
+            }
         }
         .frame(width: 90, height: 72)
         .foregroundColor(EarTrainColors.textPrimary)
+        .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(EarTrainColors.surface)
@@ -231,19 +236,7 @@ public struct ContourView: View {
                 )
         )
         .opacity(disabled ? 0.4 : 1)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if !disabled {
-                vm.answer(contour) { correct in
-                    let context = TrialContext(areaName: vm.currentRegisterName)
-                    companion.recordOutcome(correct: correct, context: context)
-                    let isNewBest = store.updateStreakIfRecord(modeKey: "contour",
-                                                              difficulty: vm.difficultyLevel,
-                                                              streak: companion.currentStreak)
-                    if isNewBest { companion.announcePersonalBest(streak: companion.currentStreak) }
-                }
-            }
-        }
+        .disabled(disabled)
     }
 
     private func formatTime(_ seconds: Int) -> String {

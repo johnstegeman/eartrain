@@ -224,26 +224,13 @@ public struct ExerciseView: View {
     private var controls: some View {
         let replayDisabled = vm.phase == .playing
         return HStack(spacing: 16) {
-            Text("Replay")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.black)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(EarTrainColors.accent.opacity(replayDisabled ? 0.5 : 1))
-                .cornerRadius(6)
-                .contentShape(Rectangle())
-                .onTapGesture { if !replayDisabled { vm.replayInterval() } }
+            Button("Replay") { vm.replayInterval() }
+                .buttonStyle(AccentButtonStyle())
+                .disabled(replayDisabled)
 
             if vm.phase == .noRead {
-                Text("Try Again")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(EarTrainColors.accent)
-                    .cornerRadius(6)
-                    .contentShape(Rectangle())
-                    .onTapGesture { vm.replayInterval() }
+                Button("Try Again") { vm.replayInterval() }
+                    .buttonStyle(AccentButtonStyle())
             }
         }
     }

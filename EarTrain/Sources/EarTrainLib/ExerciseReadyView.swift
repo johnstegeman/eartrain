@@ -78,7 +78,7 @@ struct ExerciseReadyView: View {
 
     private func durationPill(_ duration: SessionDuration) -> some View {
         let selected = selectedDuration == duration
-        return Text(duration.label)
+        return Button(duration.label) { selectedDuration = duration }
             .font(.system(size: 13, weight: selected ? .semibold : .regular))
             .lineLimit(1)
             .foregroundColor(selected ? .black : EarTrainColors.textPrimary)
@@ -86,8 +86,7 @@ struct ExerciseReadyView: View {
             .padding(.vertical, 8)
             .background(selected ? EarTrainColors.accent : EarTrainColors.surface)
             .cornerRadius(8)
-            .contentShape(Rectangle())
-            .onTapGesture { selectedDuration = duration }
+            .buttonStyle(.plain)
     }
 }
 
