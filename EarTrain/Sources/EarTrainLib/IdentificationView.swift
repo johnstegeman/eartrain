@@ -221,8 +221,9 @@ public struct IdentificationView: View {
                 Text(label)
                     .font(.system(size: 15, weight: .semibold))
             }
+            .frame(width: 90, height: 72)
+            .contentShape(Rectangle())
         }
-        .frame(width: 90, height: 72)
         .foregroundColor(EarTrainColors.textPrimary)
         .buttonStyle(.plain)
         .background(

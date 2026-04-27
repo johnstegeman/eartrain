@@ -206,8 +206,9 @@ public struct ContourView: View {
                 Text(contour.label)
                     .font(.system(size: 14, weight: .semibold))
             }
+            .frame(width: 90, height: 72)
+            .contentShape(Rectangle())
         }
-        .frame(width: 90, height: 72)
         .foregroundColor(EarTrainColors.textPrimary)
         .buttonStyle(.plain)
         .background(
