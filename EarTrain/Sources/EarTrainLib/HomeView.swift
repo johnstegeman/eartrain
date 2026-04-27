@@ -60,16 +60,16 @@ public struct HomeView: View {
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(EarTrainColors.textPrimary)
 
-            Text(done ? "Come back tomorrow and keep the streak going." : rec.reason)
+            Text(done ? "Great session. Keep going or come back tomorrow." : rec.reason)
                 .font(.system(size: 13))
                 .foregroundColor(EarTrainColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if !done {
-                Button(rec.cta) { activeMode = rec.mode }
-                    .buttonStyle(AccentButtonStyle())
-                    .padding(.top, 4)
+            Button(done ? "Keep Going" : rec.cta) {
+                activeMode = done ? .freeplay : rec.mode
             }
+            .buttonStyle(AccentButtonStyle())
+            .padding(.top, 4)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
