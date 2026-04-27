@@ -42,34 +42,36 @@ public struct HomeView: View {
 
     private var todaysFocusCard: some View {
         let rec = store.todayRecommendation
-        let done = store.practicedToday
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                if done {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundColor(EarTrainColors.success)
-                }
-                Text(done ? "SESSION COMPLETE" : "TODAY'S FOCUS")
+                Text("TODAY'S FOCUS")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(0.8)
-                    .foregroundColor(done ? EarTrainColors.success : EarTrainColors.accent)
+                    .foregroundColor(EarTrainColors.accent)
+                Spacer()
+                if store.practicedToday {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 10))
+                        Text("Practiced today")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(EarTrainColors.success)
+                }
             }
 
-            Text(done ? "Nice work today." : rec.headline)
+            Text(rec.headline)
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(EarTrainColors.textPrimary)
 
-            Text(done ? "Great session. Keep going or come back tomorrow." : rec.reason)
+            Text(rec.reason)
                 .font(.system(size: 13))
                 .foregroundColor(EarTrainColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button(done ? "Keep Going" : rec.cta) {
-                activeMode = done ? .freeplay : rec.mode
-            }
-            .buttonStyle(AccentButtonStyle())
-            .padding(.top, 4)
+            Button(rec.cta) { activeMode = rec.mode }
+                .buttonStyle(AccentButtonStyle())
+                .padding(.top, 4)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -77,11 +79,7 @@ public struct HomeView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(
-                    done ? EarTrainColors.success.opacity(0.25)
-                         : EarTrainColors.accent.opacity(0.25),
-                    lineWidth: 1.5
-                )
+                .stroke(EarTrainColors.accent.opacity(0.25), lineWidth: 1.5)
         )
     }
 
