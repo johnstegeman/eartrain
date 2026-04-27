@@ -18,6 +18,28 @@
 
 ---
 
+## Design intent: separating interval difficulty from register difficulty
+
+When a user flags a pair as "tricky" (or shows high error rates on specific pairs), there are
+three possible root causes that the bucket grid is designed to disentangle:
+
+1. **Interval type** — if error rate is high across all octave bands for a gap group (e.g., gap_7_12),
+   large intervals are hard regardless of register. This is interval-type difficulty.
+2. **Register/frequency** — if error rate is high across all gap groups in an octave band (e.g., oct_5),
+   the high register is hard regardless of interval size. This is CI frequency-map difficulty.
+3. **Combination** — if errors concentrate at a specific (gap_group × octave_band) intersection,
+   it's both: e.g., large intervals specifically in the high register. For CI users, this often
+   reflects where the CI processor's frequency channels are crowded or less discriminating.
+
+Audie should eventually be able to say: "Your error rate on 7–12 semitone intervals in the
+high register is 73%, vs 24% everywhere else — that's not the interval type in general,
+it's where those intervals land in your CI's frequency map." This is clinically actionable.
+
+The flagged_pair_N1_N2 keys in app_state (written when the user taps "Flag as tricky" in
+ContourView) are a direct user signal that feeds this analysis. The mastery engine should
+incorporate them as a prior — pairs with flags should be sampled more, and their bucket
+should count toward the problem diagnosis.
+
 ## What this migration delivers
 
 1. **Mastery engine** — per-bucket (semitone-gap-group × octave-band) coverage check with
