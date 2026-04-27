@@ -65,7 +65,7 @@ public final class ProgressStore: ObservableObject {
 
             try db.dbQueue.read { d in
                 s.totalSessions = (try Int.fetchOne(
-                    d, sql: "SELECT COUNT(*) FROM sessions")) ?? 0
+                    d, sql: "SELECT COUNT(*) FROM sessions WHERE total_trials > 0")) ?? 0
                 s.totalTrials = (try Int.fetchOne(
                     d, sql: "SELECT COUNT(*) FROM trials")) ?? 0
 
