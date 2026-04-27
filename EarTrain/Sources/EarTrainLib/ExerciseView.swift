@@ -68,31 +68,14 @@ public struct ExerciseView: View {
     }
 
     private var endSessionBar: some View {
-        HStack {
-            VolumeSlider(volume: $audio.outputVolume)
-            Spacer()
-            DifficultyControl(level: vm.difficultyLevel,
-                              descriptions: vm.difficultyDescriptions) { level in
-                vm.difficultyLevel = level
-            }
-            .padding(.trailing, 6)
-            if let secs = vm.timeRemainingSeconds {
-                Text(formatTime(secs))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(secs < 60 ? EarTrainColors.error : EarTrainColors.textDisabled)
-                    .padding(.trailing, 8)
-            }
-            Button("End Session") { endSession() }
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(EarTrainColors.textSecondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(EarTrainColors.surface)
-                .cornerRadius(6)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
+        ExerciseSessionBar(
+            volume: $audio.outputVolume,
+            difficultyLevel: vm.difficultyLevel,
+            difficultyDescriptions: vm.difficultyDescriptions,
+            timeRemainingSeconds: vm.timeRemainingSeconds,
+            onDifficultyChange: { vm.difficultyLevel = $0 },
+            onEnd: endSession
+        )
     }
 
     private func endSession() {
@@ -273,10 +256,5 @@ public struct ExerciseView: View {
         }
     }
 
-    private func formatTime(_ seconds: Int) -> String {
-        let m = seconds / 60
-        let s = seconds % 60
-        return String(format: "%d:%02d", m, s)
-    }
 }
 

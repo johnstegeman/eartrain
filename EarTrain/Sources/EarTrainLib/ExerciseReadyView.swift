@@ -178,6 +178,54 @@ struct DifficultyControl: View {
 
 // MARK: - Shared volume slider
 
+// MARK: - Shared exercise session header bar
+
+/// Header bar shown during all active exercise sessions.
+/// Contains volume slider, difficulty control, optional countdown, and End Session button.
+struct ExerciseSessionBar: View {
+    @Binding var volume: Float
+    let difficultyLevel: Int
+    let difficultyDescriptions: [String]
+    let timeRemainingSeconds: Int?
+    let onDifficultyChange: (Int) -> Void
+    let onEnd: () -> Void
+
+    var body: some View {
+        HStack {
+            VolumeSlider(volume: $volume)
+            Spacer()
+            DifficultyControl(level: difficultyLevel,
+                              descriptions: difficultyDescriptions,
+                              onSelect: onDifficultyChange)
+            .padding(.trailing, 6)
+            if let secs = timeRemainingSeconds {
+                Text(formatTime(secs))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(secs < 60 ? EarTrainColors.error : EarTrainColors.textDisabled)
+                    .padding(.trailing, 8)
+            }
+            Button("End Session") { onEnd() }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(EarTrainColors.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(EarTrainColors.surface)
+                .cornerRadius(6)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+    }
+
+    private func formatTime(_ seconds: Int) -> String {
+        let m = seconds / 60
+        let s = seconds % 60
+        return String(format: "%d:%02d", m, s)
+    }
+}
+
+// MARK: - Shared volume slider
+
 /// Compact speaker-icon + slider control. Used on both the ready screen and
 /// the running-exercise header. Binds directly to AudioEngineManager.outputVolume.
 struct VolumeSlider: View {
