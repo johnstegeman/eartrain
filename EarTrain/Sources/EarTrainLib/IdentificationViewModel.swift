@@ -105,7 +105,7 @@ public final class IdentificationViewModel: ObservableObject, DifficultyAdjustab
 
     public func beginSession(duration: SessionDuration = .open) {
         logger?.endSession()
-        logger = SessionLogger(mode: "identification")
+        logger = SessionLogger(primitive: "interval-id")
         sessionStartDate = Date()
         totalTrials   = 0
         correctTrials = 0
@@ -161,7 +161,7 @@ public final class IdentificationViewModel: ObservableObject, DifficultyAdjustab
 
         phase = .result(correct: correct, wasTarget: quizIsTarget, actual: quizInterval)
         logger?.logIdentificationTrial(interval: quizInterval, rootHz: quizRootHz,
-                                       correct: correct)
+                                       correct: correct, difficulty: difficultyLevel)
         onResult?(correct)
 
         if correctStreak >= streakToAdvance {

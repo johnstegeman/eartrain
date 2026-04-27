@@ -33,12 +33,18 @@ public struct ExerciseView: View {
             } else {
                 VStack(spacing: 0) {
                     endSessionBar
-                    VStack(spacing: 32) {
-                        intervalDisplay
-                        statusPanel
-                        controls
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 20)
+                        VStack(spacing: 28) {
+                            intervalDisplay
+                            statusPanel
+                            controls
+                        }
+                        Spacer(minLength: 20)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .overlay(alignment: .bottom) {
                     AudieChatPanel(companion: companion)
                 }
             }
@@ -68,27 +74,14 @@ public struct ExerciseView: View {
     }
 
     private var endSessionBar: some View {
-        HStack {
-            VolumeSlider(volume: $audio.outputVolume)
-            Spacer()
-            DifficultyControl(level: vm.difficultyLevel,
-                              descriptions: vm.difficultyDescriptions) { level in
-                vm.difficultyLevel = level
-            }
-            .padding(.trailing, 6)
-            if let secs = vm.timeRemainingSeconds {
-                Text(formatTime(secs))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(secs < 60 ? EarTrainColors.error : EarTrainColors.textDisabled)
-                    .padding(.trailing, 8)
-            }
-            Button("End Session") { endSession() }
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(EarTrainColors.textDisabled)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
+        ExerciseSessionBar(
+            volume: $audio.outputVolume,
+            difficultyLevel: vm.difficultyLevel,
+            difficultyDescriptions: vm.difficultyDescriptions,
+            timeRemainingSeconds: vm.timeRemainingSeconds,
+            onDifficultyChange: { vm.difficultyLevel = $0 },
+            onEnd: endSession
+        )
     }
 
     private func endSession() {
@@ -118,7 +111,7 @@ public struct ExerciseView: View {
         }
         .padding(32)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var rootLabel: String {
@@ -130,11 +123,23 @@ public struct ExerciseView: View {
 
     // MARK: - Status
 
+    private var phaseIndex: Int {
+        switch vm.phase {
+        case .idle:             return 0
+        case .playing:          return 1
+        case .awaitingRoot:     return 2
+        case .awaitingInterval: return 3
+        case .result:           return 4
+        case .noRead:           return 5
+        }
+    }
+
     private var statusPanel: some View {
         Group {
             switch vm.phase {
             case .idle:
                 statusText("Ready", color: EarTrainColors.textSecondary)
+                    .transition(.opacity)
             case .playing:
                 HStack(spacing: 8) {
                     Image(systemName: "speaker.wave.2.fill")
@@ -142,6 +147,7 @@ public struct ExerciseView: View {
                 }
                 .foregroundColor(EarTrainColors.accent)
                 .font(.system(size: 16, weight: .semibold))
+                .transition(.opacity)
             case .awaitingRoot:
                 HStack(spacing: 8) {
                     Image(systemName: "mic.fill")
@@ -149,6 +155,7 @@ public struct ExerciseView: View {
                 }
                 .foregroundColor(EarTrainColors.textPrimary)
                 .font(.system(size: 16, weight: .semibold))
+                .transition(.opacity)
             case .awaitingInterval:
                 HStack(spacing: 8) {
                     Image(systemName: "mic.fill")
@@ -156,8 +163,10 @@ public struct ExerciseView: View {
                 }
                 .foregroundColor(EarTrainColors.accent)
                 .font(.system(size: 16, weight: .semibold))
+                .transition(.opacity)
             case .result(let result):
                 resultBadge(result)
+                    .transition(.opacity)
             case .noRead:
                 VStack(spacing: 8) {
                     Text("Couldn't detect pitch")
@@ -167,8 +176,10 @@ public struct ExerciseView: View {
                         .font(.system(size: 12))
                         .foregroundColor(EarTrainColors.textDisabled)
                 }
+                .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: phaseIndex)
         .frame(height: 60)
     }
 
@@ -194,7 +205,7 @@ public struct ExerciseView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(resultColor(result).opacity(0.12))
-        .cornerRadius(10)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Controls
@@ -202,26 +213,13 @@ public struct ExerciseView: View {
     private var controls: some View {
         let replayDisabled = vm.phase == .playing
         return HStack(spacing: 16) {
-            Text("Replay")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.black)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(EarTrainColors.accent.opacity(replayDisabled ? 0.5 : 1))
-                .cornerRadius(6)
-                .contentShape(Rectangle())
-                .onTapGesture { if !replayDisabled { vm.replayInterval() } }
+            Button("Replay") { vm.replayInterval() }
+                .buttonStyle(AccentButtonStyle())
+                .disabled(replayDisabled)
 
             if vm.phase == .noRead {
-                Text("Try Again")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(EarTrainColors.accent)
-                    .cornerRadius(6)
-                    .contentShape(Rectangle())
-                    .onTapGesture { vm.replayInterval() }
+                Button("Try Again") { vm.replayInterval() }
+                    .buttonStyle(AccentButtonStyle())
             }
         }
     }
@@ -258,19 +256,11 @@ public struct ExerciseView: View {
     private func resultColor(_ r: ExerciseResult) -> Color {
         switch r {
         case .correct:            return EarTrainColors.success
-        case .close:              return EarTrainColors.warning
-        case .octaveDisplaced:    return EarTrainColors.warning
+        case .close:              return EarTrainColors.accent
+        case .octaveDisplaced:    return EarTrainColors.accent
         case .wrong:              return EarTrainColors.error
         }
     }
 
-    private func formatTime(_ seconds: Int) -> String {
-        let m = seconds / 60
-        let s = seconds % 60
-        return String(format: "%d:%02d", m, s)
-    }
 }
 
-private extension EarTrainColors {
-    static let warning = Color(hex: "#f5a623")
-}

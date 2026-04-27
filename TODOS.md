@@ -1,5 +1,52 @@
 # TODOS
 
+## ~~Navigation refactor (Phase 1.5)~~ DONE — see MIGRATION_NAV_PHASE_1_5.md
+## ~~Phase 1.6 SQLite via GRDB~~ DONE — see MIGRATION_1_6.md
+## ~~Phase 1.7 Mastery engine + weighted sampler~~ DONE — see MIGRATION_1_7.md
+
+
+
+**What:** Migrate the app from top-tab navigation to a `NavigationSplitView` sidebar with
+6 fixed destinations: Home / Tune / Plans / Freeplay / Progress / Settings.
+**Why:** Per `LESSON_PRIMITIVES.md`, 12 exercise primitives are planned. Current top-tab
+nav puts each primitive on its own tab and has no path to scale. The `.etplan` lesson
+plan system (Phase 2) requires a Plans destination. The new sidebar architecture is fixed
+at 6 items regardless of how many primitives ship.
+**Spec:** `DESIGN_SYSTEM.md` "App architecture" and "Navigation" sections.
+**Migration plan:** see `MIGRATION_NAV_PHASE_1_5.md` (4 sequential steps, each independently
+shippable). Do them in order; do not bundle.
+**Depends on:** nothing — this is a chassis change with no upstream blockers.
+**Unblocks:** Phase 2 (LessonRunner, `.etplan` loader, default plan bundling).
+
+---
+
+## Phase 1.7: use flagged pairs + bucket analysis to distinguish interval vs register difficulty
+
+**What:** When Phase 1.7 (mastery engine + ContourSampler) is implemented, incorporate
+two signal sources that are now being captured:
+
+1. **User-flagged pairs** — `app_state` keys `flagged_pair_N1_N2` written when user taps
+   "Flag as tricky" in the chat panel. ContourSampler should load these on init and add
+   a fixed weight boost to those (note1_midi, note2_midi) pairs.
+
+2. **Bucket-level diagnosis** — after enough data, compare error rates across:
+   - Same octave band, different gap groups → isolates interval-type difficulty
+   - Same gap group, different octave bands → isolates register/frequency difficulty
+   - If a user has high error in gap_7_12 × oct_5 but low everywhere else → combination
+
+   Audie's companion messages (and eventually the audiologist view) should surface this
+   as actionable insight: "Large intervals are fine in the mid register but hard in the
+   high register — this is frequency-channel difficulty, not interval difficulty."
+
+**Why:** Observed 2026-04-27 — user consistently missed G#4 → F#5 (10 semitones, high
+register). The note pair was plausibly confusing due to CI frequency-channel crowding in
+that register, not just unfamiliarity with the minor 7th interval. See LEARNINGS.md for
+the full clinical context and supporting research.
+
+**Depends on:** Phase 1.7 ContourSampler and MasteryEngine implementation.
+
+---
+
 ## ExerciseViewModel pitch detection unit tests
 
 **What:** Unit tests for the two-note detection logic in ExerciseViewModel.

@@ -37,6 +37,7 @@ public enum CompanionAction {
     case declineRaise         // "Stay at current level"
     case focusArea(String)    // Drill a specific problem area
     case declineFocus         // "Keep going with the full range"
+    case flagPair(note1: Int, note2: Int)   // Flag this note pair as tricky
 }
 
 /// Carries information about what a trial tested — so Audie can spot area-specific patterns.
@@ -196,9 +197,18 @@ public final class CompanionEngine: ObservableObject {
         let atMaxDifficulty = level >= 5
         let accuracyAtLevel = trialsAtLevel > 0
             ? Double(correctAtLevel) / Double(trialsAtLevel) : 0
-        let readyToRaise = consecutiveCorrect >= 8
-            && trialsAtLevel >= 20
-            && accuracyAtLevel >= 0.75
+        // Use MasterySettings thresholds so raise-difficulty and gate-clearance
+        // are the same ladder: you earn each level with the same accuracy standard
+        // required to eventually clear the mastery gate.
+        let window = MasterySettings.recencyWindow
+        let threshold = MasterySettings.accuracyThreshold
+        let belowMinDiff = level < MasterySettings.minDifficulty
+        // Below the required difficulty, be more eager to suggest raising (streak of 5).
+        // At or above, use a higher bar (streak of 8) since it's optional growth.
+        let streakNeeded = belowMinDiff ? 5 : 8
+        let readyToRaise = consecutiveCorrect >= streakNeeded
+            && trialsAtLevel >= window
+            && accuracyAtLevel >= threshold
 
         if readyToRaise && !hasOfferedRaiseDifficulty {
             trialsSinceLastMessage = 0
@@ -222,6 +232,16 @@ public final class CompanionEngine: ObservableObject {
 
     /// Call when the user just set a new personal best streak.
     /// Only fires if the streak is meaningful (≥ 5) and at most once per session.
+    /// Called when the user has replayed a wrong contour answer multiple times.
+    /// Names the two notes and offers a "Flag as tricky" action.
+    public func revealContourNotes(firstNote: String, secondNote: String,
+                                   direction: String,
+                                   note1Midi: Int, note2Midi: Int) {
+        let text = "That was \(firstNote) → \(secondNote). The second note is \(direction)."
+        addMessage(text, action: .flagPair(note1: note1Midi, note2: note2Midi),
+                   actionLabel: "Flag as tricky")
+    }
+
     public func announcePersonalBest(streak: Int) {
         guard streak >= 5, !hasAnnouncedPersonalBest else { return }
         hasAnnouncedPersonalBest = true
@@ -270,6 +290,11 @@ public final class CompanionEngine: ObservableObject {
 
         case .suggestBreak:
             break
+
+        case .flagPair(let note1, let note2):
+            // Store flagged pair in app_state so Phase 1.7 sampler can weight it higher.
+            AudieDatabase.shared.setAppState("true", forKey: "flagged_pair_\(note1)_\(note2)")
+            addMessage("Noted — I'll make sure that pair comes up more often.")
         }
     }
 
@@ -381,7 +406,7 @@ public struct AudieChatPanel: View {
     public var body: some View {
         if companion.messages.isEmpty { EmptyView() } else {
             VStack(spacing: 0) {
-                Divider().background(EarTrainColors.surface)
+                Divider().background(Color(hex: "#2d2d2d"))
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 10) {
@@ -403,7 +428,12 @@ public struct AudieChatPanel: View {
                 }
             }
             .frame(maxHeight: 160)
-            .background(EarTrainColors.bg)
+            .background(
+                ZStack {
+                    EarTrainColors.surface
+                    EarTrainColors.accent.opacity(0.07)
+                }
+            )
         }
     }
 }
@@ -434,7 +464,7 @@ private struct AudieBubble: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(EarTrainColors.accent)
-                        .cornerRadius(5)
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
                         .contentShape(Rectangle())
                         .onTapGesture { onAction() }
                 }
@@ -442,7 +472,7 @@ private struct AudieBubble: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(EarTrainColors.surface)
-            .cornerRadius(12)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
             .frame(maxWidth: 340, alignment: .leading)
         }
     }

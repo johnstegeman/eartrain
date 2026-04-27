@@ -33,13 +33,20 @@ public struct IdentificationView: View {
             } else {
                 VStack(spacing: 0) {
                     endSessionBar
-                    VStack(spacing: 28) {
+                    VStack(spacing: 0) {
                         scorePanel
-                        teachPanel
-                        statusPanel
-                        answerButtons
+                            .padding(.top, 8)
+                        Spacer(minLength: 20)
+                        VStack(spacing: 24) {
+                            teachPanel
+                            statusPanel
+                            answerButtons
+                        }
+                        Spacer(minLength: 20)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .overlay(alignment: .bottom) {
                     AudieChatPanel(companion: companion)
                 }
             }
@@ -58,27 +65,14 @@ public struct IdentificationView: View {
     }
 
     private var endSessionBar: some View {
-        HStack {
-            VolumeSlider(volume: $audio.outputVolume)
-            Spacer()
-            DifficultyControl(level: vm.difficultyLevel,
-                              descriptions: vm.difficultyDescriptions) { level in
-                vm.difficultyLevel = level
-            }
-            .padding(.trailing, 6)
-            if let secs = vm.timeRemainingSeconds {
-                Text(formatTime(secs))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(secs < 60 ? EarTrainColors.error : EarTrainColors.textDisabled)
-                    .padding(.trailing, 8)
-            }
-            Button("End Session") { endSession() }
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(EarTrainColors.textDisabled)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
+        ExerciseSessionBar(
+            volume: $audio.outputVolume,
+            difficultyLevel: vm.difficultyLevel,
+            difficultyDescriptions: vm.difficultyDescriptions,
+            timeRemainingSeconds: vm.timeRemainingSeconds,
+            onDifficultyChange: { vm.difficultyLevel = $0 },
+            onEnd: endSession
+        )
     }
 
     private func endSession() {
@@ -135,7 +129,7 @@ public struct IdentificationView: View {
         }
         .padding(24)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .animation(.easeInOut(duration: 0.2), value: phaseIsTeaching)
     }
 
@@ -165,15 +159,8 @@ public struct IdentificationView: View {
                     Text("Is this a \(vm.focusInterval.displayName)?")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(EarTrainColors.textPrimary)
-                    Text("Replay")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(EarTrainColors.accent)
-                        .cornerRadius(6)
-                        .contentShape(Rectangle())
-                        .onTapGesture { vm.replayQuiz() }
+                    Button("Replay") { vm.replayQuiz() }
+                        .buttonStyle(AccentButtonStyle())
                 }
             case .result(let correct, let wasTarget, let actual):
                 resultBadge(correct: correct, wasTarget: wasTarget, actual: actual)
@@ -200,7 +187,7 @@ public struct IdentificationView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background((correct ? EarTrainColors.success : EarTrainColors.error).opacity(0.12))
-        .cornerRadius(10)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Yes / No buttons
@@ -234,14 +221,18 @@ public struct IdentificationView: View {
 
     private func answerButton(label: String, icon: String, enabled: Bool,
                                action: @escaping () -> Void) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 22, weight: .semibold))
-            Text(label)
-                .font(.system(size: 15, weight: .semibold))
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            .frame(width: 90, height: 72)
+            .contentShape(Rectangle())
         }
-        .frame(width: 90, height: 72)
         .foregroundColor(EarTrainColors.textPrimary)
+        .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(EarTrainColors.surface)
@@ -251,13 +242,7 @@ public struct IdentificationView: View {
                 )
         )
         .opacity(enabled ? 1 : 0.4)
-        .contentShape(Rectangle())
-        .onTapGesture { if enabled { action() } }
+        .disabled(!enabled)
     }
 
-    private func formatTime(_ seconds: Int) -> String {
-        let m = seconds / 60
-        let s = seconds % 60
-        return String(format: "%d:%02d", m, s)
-    }
 }

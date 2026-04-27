@@ -40,7 +40,7 @@ struct OnboardingView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(EarTrainColors.surface)
-                    .cornerRadius(8)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                     .frame(maxWidth: 260)
                     .focused($fieldFocused)
                     .onSubmit { finish() }
@@ -48,21 +48,17 @@ struct OnboardingView: View {
 
             // CTA buttons
             VStack(spacing: 12) {
-                Text(nameInput.trimmingCharacters(in: .whitespaces).isEmpty ? "Let's go!" : "Let's go, \(nameInput.trimmingCharacters(in: .whitespaces))!")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.black)
-                    .frame(width: 180)
-                    .padding(.vertical, 12)
-                    .background(EarTrainColors.accent)
-                    .cornerRadius(8)
-                    .contentShape(Rectangle())
-                    .onTapGesture { finish() }
+                Button(nameInput.trimmingCharacters(in: .whitespaces).isEmpty
+                       ? "Let's go!"
+                       : "Let's go, \(nameInput.trimmingCharacters(in: .whitespaces))!") {
+                    finish()
+                }
+                .buttonStyle(AccentButtonStyle())
+                .frame(width: 180)
 
-                Text("Skip")
+                Button("Skip") { skip() }
                     .font(.system(size: 13))
                     .foregroundColor(EarTrainColors.textDisabled)
-                    .contentShape(Rectangle())
-                    .onTapGesture { skip() }
             }
 
             Spacer()

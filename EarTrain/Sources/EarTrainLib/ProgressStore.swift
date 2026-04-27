@@ -1,4 +1,8 @@
 import Foundation
+import GRDB
+import os.log
+
+private let progressLog = Logger(subsystem: "com.audie", category: "progress")
 
 // MARK: - Today's recommendation
 
@@ -35,10 +39,11 @@ public final class ProgressStore: ObservableObject {
 
     @Published public private(set) var stats = SessionLogger.CumulativeStats()
 
-    public init() {
-        // Auto-reload whenever any exercise session ends, regardless of which
-        // SwiftUI view is currently visible. This sidesteps the race between
-        // ProgressView.onAppear and the previous tab's onDisappear.
+    private let db: AudieDatabase
+
+    /// - Parameter database: Inject for testing; defaults to `AudieDatabase.shared`.
+    public init(database: AudieDatabase = .shared) {
+        self.db = database
         NotificationCenter.default.addObserver(
             forName: .earTrainSessionDidEnd,
             object: nil,
@@ -54,10 +59,72 @@ public final class ProgressStore: ObservableObject {
     // MARK: - Public interface
 
     public func reload() {
-        guard let data = try? Data(contentsOf: Self.cumulativeURL),
-              let loaded = try? Self.decoder.decode(SessionLogger.CumulativeStats.self,
-                                                    from: data) else { return }
-        stats = loaded
+        do {
+            var s = SessionLogger.CumulativeStats()
+            s.lastUpdated = Date()
+
+            try db.dbQueue.read { d in
+                s.totalSessions = (try Int.fetchOne(
+                    d, sql: "SELECT COUNT(*) FROM sessions WHERE total_trials > 0")) ?? 0
+                s.totalTrials = (try Int.fetchOne(
+                    d, sql: "SELECT COUNT(*) FROM trials")) ?? 0
+
+                // Interval matrix: playback + identification primitives
+                let matrixRows = try Row.fetchAll(d, sql: """
+                    SELECT interval_name, register,
+                        SUM(CASE WHEN result_detail = 'correct'          THEN 1 ELSE 0 END) AS c,
+                        SUM(CASE WHEN result_detail = 'close'            THEN 1 ELSE 0 END) AS cl,
+                        SUM(CASE WHEN result_detail = 'octave_displaced' THEN 1 ELSE 0 END) AS od,
+                        SUM(CASE WHEN result_detail = 'wrong'            THEN 1 ELSE 0 END) AS wr,
+                        SUM(CASE WHEN result_detail = 'no_read'          THEN 1 ELSE 0 END) AS nr
+                    FROM trials
+                    WHERE primitive IN ('interval-id', 'interval-playback')
+                      AND interval_name IS NOT NULL
+                      AND register IS NOT NULL
+                    GROUP BY interval_name, register
+                    """)
+                for row in matrixRows {
+                    let iName: String? = row["interval_name"]
+                    let reg:   String? = row["register"]
+                    guard let iName, let reg else { continue }
+                    var counts = SessionLogger.RegisterCounts()
+                    counts.correct         = Int.fromDatabaseValue(row["c"])  ?? 0
+                    counts.close           = Int.fromDatabaseValue(row["cl"]) ?? 0
+                    counts.octaveDisplaced = Int.fromDatabaseValue(row["od"]) ?? 0
+                    counts.wrong           = Int.fromDatabaseValue(row["wr"]) ?? 0
+                    counts.noRead          = Int.fromDatabaseValue(row["nr"]) ?? 0
+                    var byReg = s.matrix[iName] ?? [:]
+                    byReg[reg] = counts
+                    s.matrix[iName] = byReg
+                }
+
+                // Contour matrix
+                let contourRows = try Row.fetchAll(d, sql: """
+                    SELECT interval_name, register,
+                        SUM(correct) AS c,
+                        COUNT(*)     AS total
+                    FROM trials
+                    WHERE primitive = 'contour'
+                      AND interval_name IS NOT NULL
+                      AND register IS NOT NULL
+                    GROUP BY interval_name, register
+                    """)
+                for row in contourRows {
+                    let iName: String? = row["interval_name"]
+                    let reg:   String? = row["register"]
+                    guard let iName, let reg else { continue }
+                    var counts = SessionLogger.ContourCounts()
+                    counts.correct = Int.fromDatabaseValue(row["c"])     ?? 0
+                    counts.total   = Int.fromDatabaseValue(row["total"]) ?? 0
+                    var byReg = s.contour[iName] ?? [:]
+                    byReg[reg] = counts
+                    s.contour[iName] = byReg
+                }
+            }
+            stats = s
+        } catch {
+            progressLog.error("reload() failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Counts for a specific (interval, register) cell. Nil if no data yet.
@@ -96,6 +163,7 @@ public final class ProgressStore: ObservableObject {
     public var hasContourData: Bool {
         stats.contour.values.contains { $0.values.contains { $0.total > 0 } }
     }
+
 
     /// Top N interval × register buckets ranked by error rate, requiring ≥ 5 trials each.
     /// Used on the End of Session screen to surface the biggest weak spots.
@@ -147,21 +215,56 @@ public final class ProgressStore: ObservableObject {
         return Calendar.current.isDateInToday(last)
     }
 
-    /// What Audie recommends doing right now, derived from the user's gap analysis.
+    /// What Audie recommends doing right now, based on where the user is in the curriculum.
+    ///
+    /// Curriculum ladder: Contour → Interval Identification → Interval Playback
+    /// A stage advances only when the previous one is mastered. Users are never
+    /// pushed forward prematurely — mastery requires both enough trials and strong accuracy.
+    ///
+    /// Difficulty-gated mastery (requiring difficulty 5) is a Phase 2 addition
+    /// once LessonRunner tracks per-trial difficulty.
     public var todayRecommendation: TodayRecommendation {
-        let hasIntervalData = !stats.matrix.isEmpty
 
-        // New user: start simple
-        if stats.totalSessions == 0 {
+        // ── Stage 1: Contour — gated by MasteryEngine bucket analysis ─────────
+        let (masteryState, _) = MasteryEngine.evaluate()
+        switch masteryState {
+        case .notStarted:
             return TodayRecommendation(
                 mode: .contour,
                 headline: "Start with Contour",
                 reason: "Hearing whether a note goes up or down is the foundation. Start here.",
                 cta: "Begin"
             )
+        case .inProgress(let met, let required, let total):
+            let prompt = total >= MasterySettings.softAdvanceAt
+                ? " (advance option available)"
+                : ""
+            return TodayRecommendation(
+                mode: .contour,
+                headline: "Keep Building Contour",
+                reason: "\(met) of \(required) coverage buckets cleared\(prompt). Keep going.",
+                cta: "Continue"
+            )
+        case .gateCleared, .advancedEarly:
+            break   // fall through to Stage 2
         }
 
-        // Specific drillable weakness (≥5 trials, >35% errors)
+        // ── Stage 2: Interval Identification ─────────────────────────────────
+        // Learn what intervals sound like before playing them back.
+        // Gate: contour mastered AND no identification/interval data yet.
+
+        if stats.matrix.isEmpty {
+            return TodayRecommendation(
+                mode: .identification,
+                headline: "Name the Intervals",
+                reason: "Contour is solid. Now learn what each interval sounds like before playing it back.",
+                cta: "Start"
+            )
+        }
+
+        // ── Stage 3: Interval Playback — confusion-matrix targeting ──────────
+
+        // Specific drillable weakness (≥ 5 trials, > 35% error rate)
         if let hit = topConfusionBuckets(limit: 1).first, hit.errorRate > 0.35 {
             let pct = Int(hit.errorRate * 100)
             return TodayRecommendation(
@@ -172,33 +275,12 @@ public final class ProgressStore: ObservableObject {
             )
         }
 
-        // Has contour data but hasn't touched intervals yet
-        if !hasIntervalData {
-            return TodayRecommendation(
-                mode: .intervals,
-                headline: "Try Interval Training",
-                reason: "You've built pitch direction with Contour — time to name the intervals.",
-                cta: "Start"
-            )
-        }
-
-        // Has intervals but hasn't tried contour
-        if !hasContourData {
-            return TodayRecommendation(
-                mode: .contour,
-                headline: "Try Contour Training",
-                reason: "Trains pitch direction directly — complements your interval work.",
-                cta: "Try It"
-            )
-        }
-
-        // Below 70% accuracy: keep drilling intervals
         if let acc = overallAccuracy, acc < 0.70 {
             return TodayRecommendation(
                 mode: .intervals,
                 headline: "Keep Drilling Intervals",
                 reason: "Accuracy at \(Int(acc * 100))% — consistent reps is how it climbs.",
-                cta: "Start Session"
+                cta: "Continue"
             )
         }
 
@@ -206,7 +288,7 @@ public final class ProgressStore: ObservableObject {
             mode: .intervals,
             headline: "Keep Building",
             reason: "Steady daily practice compounds. Even 10 minutes moves the needle.",
-            cta: "Start Session"
+            cta: "Continue"
         )
     }
 
@@ -257,13 +339,17 @@ public final class ProgressStore: ObservableObject {
         objectWillChange.send()
     }
 
-    /// Deletes cumulative.json, all session files, and clears the last-session date.
-    /// Resets in-memory stats so the UI reflects the clean state immediately.
+    /// Deletes all trial and session data. Resets in-memory stats immediately.
     public func clearAllProgress() {
-        let appSupportAudie = Self.cumulativeURL.deletingLastPathComponent()
-        try? FileManager.default.removeItem(at: Self.cumulativeURL)
-        let sessionsDir = appSupportAudie.appendingPathComponent("sessions")
-        try? FileManager.default.removeItem(at: sessionsDir)
+        do {
+            try db.dbQueue.write { d in
+                try d.execute(sql: "DELETE FROM trials")
+                try d.execute(sql: "DELETE FROM sessions")
+                try d.execute(sql: "DELETE FROM app_state WHERE key != 'json_migrated'")
+            }
+        } catch {
+            progressLog.error("clearAllProgress DB failed: \(error.localizedDescription, privacy: .public)")
+        }
         UserDefaults.standard.removeObject(forKey: "lastSessionDate")
         UserDefaults.standard.removeObject(forKey: "difficultyLevel_contour")
         UserDefaults.standard.removeObject(forKey: "difficultyLevel_intervals")
@@ -276,18 +362,69 @@ public final class ProgressStore: ObservableObject {
         "longestStreak_\(modeKey)_\(difficulty)"
     }
 
-    // MARK: - Private
+    // MARK: - GRDB-backed per-trial queries
 
-    private static var cumulativeURL: URL {
-        FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Audie")
-            .appendingPathComponent("cumulative.json")
+    /// Recent accuracy for a primitive over the last `window` trials.
+    /// Returns nil if fewer than 5 trials exist.
+    public func recentAccuracy(primitive: String, window: Int = 20) -> Double? {
+        do {
+            let rows = try db.dbQueue.read { d in
+                try Row.fetchAll(d, sql: """
+                    SELECT correct FROM trials
+                    WHERE primitive = ?
+                    ORDER BY ts DESC LIMIT ?
+                    """, arguments: [primitive, window])
+            }
+            guard rows.count >= 5 else { return nil }
+            let correct = rows.reduce(0) { $0 + (Int.fromDatabaseValue($1["correct"]) ?? 0) }
+            return Double(correct) / Double(rows.count)
+        } catch {
+            progressLog.error("recentAccuracy failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
-    private static let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        return d
-    }()
+    /// Total trial count for a primitive from the DB.
+    public func dbTrialCount(primitive: String) -> Int {
+        (try? db.dbQueue.read { d in
+            try Int.fetchOne(d,
+                sql: "SELECT COUNT(*) FROM trials WHERE primitive = ?",
+                arguments: [primitive]) ?? 0
+        }) ?? 0
+    }
+
+    /// Contour note pairs with ≥ `minTrials` trials, sorted by error rate descending.
+    /// Used by ContourSampler (Phase 1.7) to weight problem pairs more heavily.
+    ///
+    /// Phase 1.6: computes over all recorded trials (no recency window).
+    /// Phase 1.7 will add per-window filtering once the mastery engine is in place.
+    public func contourProblemPairs(minTrials: Int = 5,
+                                    window: Int = 20
+    ) -> [(note1: Int, note2: Int, recentErrorRate: Double)] {
+        do {
+            let rows = try db.dbQueue.read { d in
+                try Row.fetchAll(d, sql: """
+                    SELECT note1_midi, note2_midi,
+                           1.0 - AVG(CAST(correct AS REAL)) AS error_rate,
+                           COUNT(*) AS n
+                    FROM trials
+                    WHERE primitive = 'contour'
+                      AND note1_midi IS NOT NULL
+                      AND note2_midi IS NOT NULL
+                    GROUP BY note1_midi, note2_midi
+                    HAVING COUNT(*) >= ?
+                    ORDER BY error_rate DESC
+                    """, arguments: [minTrials])
+            }
+            return rows.compactMap { row -> (Int, Int, Double)? in
+                guard let n1: Int = Int.fromDatabaseValue(row["note1_midi"]),
+                      let n2: Int = Int.fromDatabaseValue(row["note2_midi"]) else { return nil }
+                let err: Double = Double.fromDatabaseValue(row["error_rate"]) ?? 0
+                return (n1, n2, err)
+            }
+        } catch {
+            progressLog.error("contourProblemPairs failed: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
+    }
 }

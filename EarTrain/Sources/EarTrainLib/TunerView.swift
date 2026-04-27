@@ -111,7 +111,7 @@ public struct TunerView: View {
         .frame(maxWidth: .infinity)
         .padding(32)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Gauge card
@@ -141,7 +141,7 @@ public struct TunerView: View {
         }
         .padding(24)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Level card
@@ -167,7 +167,7 @@ public struct TunerView: View {
         }
         .padding(20)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var levelBarColor: Color {
@@ -186,13 +186,13 @@ private struct TunerNeedle: View {
     // Zones: red 0–25%, amber 25–40%, green 40–60%, amber 60–75%, red 75–100%.
     private static let zoneGradient = LinearGradient(
         stops: [
-            .init(color: Color(hex: "#ef4444").opacity(0.55), location: 0.00),
-            .init(color: Color(hex: "#ef4444").opacity(0.55), location: 0.25),
-            .init(color: Color(hex: "#f5a623").opacity(0.65), location: 0.40),
-            .init(color: Color(hex: "#4ade80").opacity(0.70), location: 0.50),
-            .init(color: Color(hex: "#f5a623").opacity(0.65), location: 0.60),
-            .init(color: Color(hex: "#ef4444").opacity(0.55), location: 0.75),
-            .init(color: Color(hex: "#ef4444").opacity(0.55), location: 1.00),
+            .init(color: EarTrainColors.error.opacity(0.55),   location: 0.00),
+            .init(color: EarTrainColors.error.opacity(0.55),   location: 0.25),
+            .init(color: EarTrainColors.accent.opacity(0.65),  location: 0.40),
+            .init(color: EarTrainColors.success.opacity(0.70), location: 0.50),
+            .init(color: EarTrainColors.accent.opacity(0.65),  location: 0.60),
+            .init(color: EarTrainColors.error.opacity(0.55),   location: 0.75),
+            .init(color: EarTrainColors.error.opacity(0.55),   location: 1.00),
         ],
         startPoint: .leading,
         endPoint: .trailing
@@ -208,7 +208,7 @@ private struct TunerNeedle: View {
                 // Color track
                 Self.zoneGradient
                     .frame(height: 12)
-                    .cornerRadius(6)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
 
                 // Center tick
                 Rectangle()

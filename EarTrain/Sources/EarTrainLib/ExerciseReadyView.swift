@@ -42,9 +42,6 @@ struct ExerciseReadyView: View {
             // Icon + title + description
             VStack(spacing: 10) {
                 AudiePNGImage(size: 72)
-                Image(systemName: mode.icon)
-                    .font(.system(size: 44))
-                    .foregroundColor(EarTrainColors.accent)
                 Text(mode.label)
                     .font(.system(size: 26, weight: .bold))
                     .foregroundColor(EarTrainColors.textPrimary)
@@ -81,16 +78,15 @@ struct ExerciseReadyView: View {
 
     private func durationPill(_ duration: SessionDuration) -> some View {
         let selected = selectedDuration == duration
-        return Text(duration.label)
+        return Button(duration.label) { selectedDuration = duration }
             .font(.system(size: 13, weight: selected ? .semibold : .regular))
             .lineLimit(1)
             .foregroundColor(selected ? .black : EarTrainColors.textPrimary)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(selected ? EarTrainColors.accent : EarTrainColors.surface)
-            .cornerRadius(8)
-            .contentShape(Rectangle())
-            .onTapGesture { selectedDuration = duration }
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .buttonStyle(.plain)
     }
 }
 
@@ -177,6 +173,54 @@ struct DifficultyControl: View {
             .padding(.bottom, 10)
         }
         .frame(width: 280)
+    }
+}
+
+// MARK: - Shared volume slider
+
+// MARK: - Shared exercise session header bar
+
+/// Header bar shown during all active exercise sessions.
+/// Contains volume slider, difficulty control, optional countdown, and End Session button.
+struct ExerciseSessionBar: View {
+    @Binding var volume: Float
+    let difficultyLevel: Int
+    let difficultyDescriptions: [String]
+    let timeRemainingSeconds: Int?
+    let onDifficultyChange: (Int) -> Void
+    let onEnd: () -> Void
+
+    var body: some View {
+        HStack {
+            VolumeSlider(volume: $volume)
+            Spacer()
+            DifficultyControl(level: difficultyLevel,
+                              descriptions: difficultyDescriptions,
+                              onSelect: onDifficultyChange)
+            .padding(.trailing, 6)
+            if let secs = timeRemainingSeconds {
+                Text(formatTime(secs))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(secs < 60 ? EarTrainColors.error : EarTrainColors.textDisabled)
+                    .padding(.trailing, 8)
+            }
+            Button("End Session") { onEnd() }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(EarTrainColors.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(EarTrainColors.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+    }
+
+    private func formatTime(_ seconds: Int) -> String {
+        let m = seconds / 60
+        let s = seconds % 60
+        return String(format: "%d:%02d", m, s)
     }
 }
 

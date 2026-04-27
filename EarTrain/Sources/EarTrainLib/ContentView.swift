@@ -10,7 +10,7 @@ final class AppSession: ObservableObject {
     let contourVM: ContourViewModel
     let identVM: IdentificationViewModel
     let exerciseVM: ExerciseViewModel
-    let progressStore = ProgressStore()
+    let progressStore = ProgressStore(database: .shared)
 
     private var cancellable: AnyCancellable?
 
@@ -35,6 +35,7 @@ public struct ContentView: View {
     @StateObject private var mic = MicrophonePermissionManager()
     @State private var mode: AppMode = .home
     @State private var sessionDuration: SessionDuration = .open
+    @State private var showingSettings = false
 
     public init() {}
 
@@ -43,10 +44,21 @@ public struct ContentView: View {
             if !session.companion.hasCompletedOnboarding {
                 OnboardingView(companion: session.companion)
             } else {
-                VStack(spacing: 0) {
-                    modePicker
-                    Divider().background(EarTrainColors.surface)
+                HStack(spacing: 0) {
+                    sidebar
+                    Divider()
+                        .background(Color(hex: "#2d2d2d"))
                     modeContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .sheet(isPresented: $showingSettings) {
+                    SettingsView(audio: session.audio, store: session.progressStore)
+                }
+                // Hidden button wires ⌘, to open Settings from anywhere in the app.
+                .background {
+                    Button("") { showingSettings = true }
+                        .keyboardShortcut(",", modifiers: .command)
+                        .hidden()
                 }
             }
         }
@@ -72,26 +84,58 @@ public struct ContentView: View {
         }
     }
 
-    private var modePicker: some View {
-        HStack(spacing: 0) {
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 2) {
             ForEach(AppMode.allCases, id: \.self) { m in
-                let selected = mode == m
-                Text(m.label)
-                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
-                    .foregroundColor(selected ? .black : EarTrainColors.textSecondary)
-                    .padding(.horizontal, 20)
+                Button {
+                    mode = m
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: m.icon)
+                            .font(.system(size: 14))
+                            .frame(width: 18, alignment: .center)
+                        Text(m.label)
+                            .font(.system(size: 13, weight: mode == m ? .semibold : .regular))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(selected ? EarTrainColors.accent : Color.clear)
-                    .cornerRadius(6)
+                    .background(mode == m ? EarTrainColors.accent.opacity(0.15) : Color.clear)
+                    .foregroundColor(mode == m ? EarTrainColors.accent : EarTrainColors.textSecondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                     .contentShape(Rectangle())
-                    .onTapGesture { mode = m }
+                }
+                .buttonStyle(.plain)
             }
+
+            Spacer()
+
+            Divider().background(Color(hex: "#2d2d2d")).padding(.horizontal, 8)
+
+            // Settings gear — opens sheet, doesn't navigate (⌘,)
+            Button {
+                showingSettings = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 14))
+                        .frame(width: 18, alignment: .center)
+                    Text("Settings")
+                        .font(.system(size: 13))
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .foregroundColor(EarTrainColors.textSecondary)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .padding(4)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 12)
+        .frame(width: 200)
+        .frame(maxHeight: .infinity)
         .background(EarTrainColors.surface)
-        .cornerRadius(8)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 10)
     }
 
     @ViewBuilder
@@ -101,6 +145,14 @@ public struct ContentView: View {
             HomeView(store: session.progressStore, activeMode: $mode, selectedDuration: $sessionDuration)
         case .tuner:
             TunerView(audio: session.audio)
+        case .plans:
+            PlansView(activeMode: $mode)
+        case .freeplay:
+            FreeplayView(contourVM: session.contourVM, identVM: session.identVM,
+                         exerciseVM: session.exerciseVM, store: session.progressStore,
+                         audio: session.audio, companion: session.companion,
+                         activeMode: $mode, selectedDuration: $sessionDuration,
+                         mic: mic)
         case .intervals:
             if mic.isBlocked {
                 MicBlockedView(openSettings: mic.openSystemSettings)
@@ -130,23 +182,36 @@ public struct ContentView: View {
 // MARK: - App mode
 
 public enum AppMode: CaseIterable {
+    // Sidebar destinations
     case home
     case tuner
+    case plans
+    case freeplay
+    case progress
+    case settings
+    // Primitive modes — not sidebar items; reached via FreeplayView or direct routing.
+    // Kept as AppMode cases so exercise views, SessionEndSummary, and CompanionEngine
+    // can reference them without a separate type.
     case contour
     case intervals
     case identification
-    case progress
-    case settings
+
+    // The 5 sidebar nav destinations. Settings is a sheet (⌘,), not a sidebar item.
+    public static var allCases: [AppMode] {
+        [.home, .tuner, .plans, .freeplay, .progress]
+    }
 
     public var label: String {
         switch self {
         case .home:           return "Home"
         case .tuner:          return "Tune"
+        case .plans:          return "Plans"
+        case .freeplay:       return "Freeplay"
+        case .progress:       return "Progress"
+        case .settings:       return "Settings"
         case .intervals:      return "Intervals"
         case .contour:        return "Contour"
         case .identification: return "Identify"
-        case .progress:       return "Progress"
-        case .settings:       return "Settings"
         }
     }
 
@@ -154,11 +219,13 @@ public enum AppMode: CaseIterable {
         switch self {
         case .home:           return "house.fill"
         case .tuner:          return "tuningfork"
+        case .plans:          return "book.closed"
+        case .freeplay:       return "square.grid.2x2"
+        case .progress:       return "chart.bar.fill"
+        case .settings:       return "gearshape.fill"
         case .intervals:      return "guitars.fill"
         case .contour:        return "arrow.up.arrow.down"
         case .identification: return "ear.fill"
-        case .progress:       return "chart.bar.fill"
-        case .settings:       return "gearshape.fill"
         }
     }
 
@@ -166,11 +233,13 @@ public enum AppMode: CaseIterable {
         switch self {
         case .home:           return ""
         case .tuner:          return "Check your tuning before you practice"
+        case .plans:          return "Browse and manage lesson plans"
+        case .freeplay:       return "Pick any exercise to drill directly"
+        case .progress:       return ""
+        case .settings:       return ""
         case .intervals:      return "Play back intervals on your guitar — mic grades your response"
         case .contour:        return "Higher, lower, or same? The simplest pitch discrimination exercise"
         case .identification: return "Hear an interval and identify it by ear only"
-        case .progress:       return ""
-        case .settings:       return ""
         }
     }
 }
@@ -211,15 +280,8 @@ private struct MicBlockedView: View {
                 .foregroundColor(EarTrainColors.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 320)
-            Text("Open System Settings")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.black)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(EarTrainColors.accent)
-                .cornerRadius(6)
-                .contentShape(Rectangle())
-                .onTapGesture { openSettings() }
+            Button("Open System Settings") { openSettings() }
+                .buttonStyle(AccentButtonStyle())
         }
     }
 }
@@ -236,11 +298,16 @@ public enum EarTrainColors {
     public static let textPrimary   = Color(hex: "#e0e0e0")
     public static let textSecondary = Color(hex: "#888888")
     public static let textDisabled  = Color(hex: "#555555")
+
+    public static func accuracy(_ value: Double) -> Color {
+        value >= 0.80 ? success : value >= 0.50 ? accent : error
+    }
 }
 
 // MARK: - Button style
 
 public struct AccentButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
     public init() {}
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -248,8 +315,8 @@ public struct AccentButtonStyle: ButtonStyle {
             .foregroundColor(.black)
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
-            .background(EarTrainColors.accent.opacity(configuration.isPressed ? 0.8 : 1))
-            .cornerRadius(6)
+            .background(EarTrainColors.accent.opacity(!isEnabled ? 0.5 : configuration.isPressed ? 0.8 : 1))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 

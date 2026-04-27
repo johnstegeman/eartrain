@@ -1,41 +1,23 @@
 import Foundation
+import GRDB
+import os.log
 
-/// Logs exercise trials to disk for confusion-matrix analysis.
+private let sessionLog = Logger(subsystem: "com.audie", category: "session")
+
+/// Logs exercise trials to the GRDB SQLite database.
 ///
-/// Files are written to:
-///   ~/Library/Application Support/Audie/sessions/{uuid}.json  (one per session)
-///   ~/Library/Application Support/Audie/cumulative.json       (running totals)
+/// One instance = one practice session. Create at session start; call `endSession()` when done.
+/// Each `log*` call writes immediately — no batching, no JSON files.
 ///
-/// All methods are synchronous and lightweight — JSON payloads are tiny
-/// (<10 KB) so main-thread writes are acceptable.
+/// Inject a custom `AudieDatabase` for testing.
 public final class SessionLogger {
 
-    // MARK: - Codable types
+    // MARK: - Codable aggregate types (retained for ProgressStore.CumulativeStats)
 
-    public struct TrialRecord: Codable {
-        public let timestamp:    Date
-        /// "playback" | "identification" | "contour". Nil in legacy records = "playback".
-        public let exerciseType: String?
-        public let interval:     String  // Interval.shortName, or contour direction for contour trials
-        public let register:     String  // Register.rawValue, or "" for contour trials
-        public let rootHz:       Float
-        public let detectedHz:   Float
-        public let result:       String  // "correct" | "close" | "octave_displaced" | "wrong" | "no_read"
-    }
-
-    /// Simple correct/total counts for the contour exercise.
     public struct ContourCounts: Codable {
         public var correct: Int = 0
         public var total:   Int = 0
         public var accuracy: Double { total > 0 ? Double(correct) / Double(total) : 0 }
-    }
-
-    public struct SessionRecord: Codable {
-        public let id: String
-        public let startedAt: Date
-        public var endedAt: Date?
-        public let mode: String
-        public var trials: [TrialRecord]
     }
 
     public struct RegisterCounts: Codable {
@@ -53,118 +35,139 @@ public final class SessionLogger {
     }
 
     public struct CumulativeStats: Codable {
-        public var lastUpdated:    Date = Date()
-        public var totalSessions:  Int  = 0
-        public var totalTrials:    Int  = 0
+        public var lastUpdated:   Date = Date()
+        public var totalSessions: Int  = 0
+        public var totalTrials:   Int  = 0
         /// Interval confusion matrix (playback + identification):
         /// matrix[interval.shortName][register.rawValue] → counts
         public var matrix: [String: [String: RegisterCounts]] = [:]
         /// Contour accuracy: contour[intervalName][register.rawValue] → counts
-        /// intervalName uses the same shortName convention as Interval (e.g. "m3", "P5").
-        /// Semitones without a named interval use "TT", "m6", "M7" etc.
         public var contour: [String: [String: ContourCounts]] = [:]
     }
 
     // MARK: - State
 
-    private var session: SessionRecord
-    private let baseURL:  URL
-    private let buckets:  RegisterBuckets
+    public let sessionId: String
+    private let startedAt: Date
+    private let primitive: String
+    private let planId: String?
+    private let planStep: Int?
+    private let timbre: String?
+    private let db: AudieDatabase
+
+    private var trialCount   = 0
+    private var correctCount = 0
 
     // MARK: - Init
 
-    public init(mode: String = "intervals",
-                buckets: RegisterBuckets = .guitarDefault) {
-        self.buckets = buckets
+    /// - Parameters:
+    ///   - primitive: One of `"contour"`, `"interval-id"`, `"interval-playback"`, etc.
+    ///   - planId: Active plan identifier, or nil for Freeplay sessions.
+    ///   - planStep: 0-indexed step within the plan, or nil for Freeplay.
+    ///   - timbre: `GuitarTimbre.rawValue` in use at session start.
+    ///   - database: Inject for testing; defaults to `AudieDatabase.shared`.
+    public init(primitive: String,
+                planId: String? = nil,
+                planStep: Int? = nil,
+                timbre: String? = GuitarTimbre.persisted.rawValue,
+                database: AudieDatabase = .shared) {
+        self.sessionId  = UUID().uuidString
+        self.startedAt  = Date()
+        self.primitive  = primitive
+        self.planId     = planId
+        self.planStep   = planStep
+        self.timbre     = timbre
+        self.db         = database
 
-        let appSupport = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        baseURL = appSupport.appendingPathComponent("Audie", isDirectory: true)
-
-        let sessionsDir = baseURL.appendingPathComponent("sessions", isDirectory: true)
-        try? FileManager.default.createDirectory(at: sessionsDir,
-                                                 withIntermediateDirectories: true)
-
-        session = SessionRecord(id: UUID().uuidString,
-                                startedAt: Date(),
-                                endedAt: nil,
-                                mode: mode,
-                                trials: [])
+        insertSessionRow()
     }
 
-    // MARK: - Logging
+    // MARK: - Trial logging
 
+    /// Log one interval-playback trial.
     public func logTrial(interval: Interval,
                          rootHz: Float,
                          detectedHz: Float,
-                         result: ExerciseResult) {
-        let reg = buckets.register(for: rootHz)
-        let trial = TrialRecord(
-            timestamp:    Date(),
-            exerciseType: "playback",
-            interval:     interval.shortName,
-            register:     reg.rawValue,
-            rootHz:       rootHz,
-            detectedHz:   detectedHz,
-            result:       resultKey(result)
+                         result: ExerciseResult,
+                         difficulty: Int) {
+        let note1 = NoteConverter.midiNote(fromHz: rootHz)
+        let note2 = note1 + interval.semitones
+        writeTrial(
+            intervalName: interval.shortName,
+            register:     RegisterBuckets.guitarDefault.register(for: rootHz).rawValue,
+            note1Midi:    note1,
+            note2Midi:    note2,
+            semitoneGap:  interval.semitones,
+            correct:      result == .correct ? 1 : 0,
+            resultDetail: resultKey(result),
+            difficulty:   difficulty
         )
-        session.trials.append(trial)
     }
 
-    public func logNoRead(interval: Interval, rootHz: Float) {
-        let reg = buckets.register(for: rootHz)
-        let trial = TrialRecord(
-            timestamp:    Date(),
-            exerciseType: "playback",
-            interval:     interval.shortName,
-            register:     reg.rawValue,
-            rootHz:       rootHz,
-            detectedHz:   0,
-            result:       "no_read"
+    /// Log a no-read event (mic couldn't detect pitch).
+    public func logNoRead(interval: Interval, rootHz: Float, difficulty: Int) {
+        let note1 = NoteConverter.midiNote(fromHz: rootHz)
+        writeTrial(
+            intervalName: interval.shortName,
+            register:     RegisterBuckets.guitarDefault.register(for: rootHz).rawValue,
+            note1Midi:    note1,
+            note2Midi:    note1 + interval.semitones,
+            semitoneGap:  interval.semitones,
+            correct:      0,
+            resultDetail: "no_read",
+            difficulty:   difficulty
         )
-        session.trials.append(trial)
     }
 
-    /// Log one identification trial (listening-only yes/no quiz).
-    /// Both playback and identification land in the same confusion matrix —
-    /// they measure the same underlying skill.
+    /// Log one interval-identification trial (listening-only).
     public func logIdentificationTrial(interval: Interval,
                                        rootHz: Float,
-                                       correct: Bool) {
-        let reg = buckets.register(for: rootHz)
-        let trial = TrialRecord(
-            timestamp:    Date(),
-            exerciseType: "identification",
-            interval:     interval.shortName,
-            register:     reg.rawValue,
-            rootHz:       rootHz,
-            detectedHz:   0,
-            result:       correct ? "correct" : "wrong"
+                                       correct: Bool,
+                                       difficulty: Int) {
+        let note1 = NoteConverter.midiNote(fromHz: rootHz)
+        writeTrial(
+            intervalName: interval.shortName,
+            register:     RegisterBuckets.guitarDefault.register(for: rootHz).rawValue,
+            note1Midi:    note1,
+            note2Midi:    note1 + interval.semitones,
+            semitoneGap:  interval.semitones,
+            correct:      correct ? 1 : 0,
+            resultDetail: correct ? "correct" : "wrong",
+            difficulty:   difficulty
         )
-        session.trials.append(trial)
     }
 
     /// Log one contour trial (higher / lower / same).
-    ///
-    /// Records the actual interval (by semitone count) and register so the
-    /// data can drive adaptive difficulty: "user struggles with m2 in low register."
-    public func logContourTrial(rootHz: Float, semitones: Int,
-                                direction: String, correct: Bool) {
-        let reg = buckets.register(for: rootHz)
-        let trial = TrialRecord(
-            timestamp:    Date(),
-            exerciseType: "contour",
-            interval:     Self.intervalName(forSemitones: semitones),
-            register:     reg.rawValue,
-            rootHz:       rootHz,
-            detectedHz:   0,
-            result:       correct ? "correct" : "wrong"
+    /// `note1Midi` and `note2Midi` should be the lower and higher notes respectively.
+    public func logContourTrial(rootHz: Float,
+                                semitones: Int,
+                                direction: String,
+                                correct: Bool,
+                                difficulty: Int,
+                                note1Midi: Int,
+                                note2Midi: Int) {
+        writeTrial(
+            intervalName: Self.intervalName(forSemitones: semitones),
+            register:     RegisterBuckets.guitarDefault.register(for: rootHz).rawValue,
+            note1Midi:    note1Midi,
+            note2Midi:    note2Midi,
+            semitoneGap:  semitones,
+            correct:      correct ? 1 : 0,
+            resultDetail: correct ? "correct" : "wrong",
+            difficulty:   difficulty
         )
-        session.trials.append(trial)
     }
 
-    /// Human-readable interval name for a raw semitone count.
-    /// Covers the full chromatic scale so contour exercises with any gap are labelled correctly.
+    // MARK: - Session lifecycle
+
+    public func endSession() {
+        updateSessionRow()
+        NotificationCenter.default.post(name: .earTrainSessionDidEnd, object: nil)
+        sessionLog.info("Session ended: \(self.sessionId, privacy: .public) primitive=\(self.primitive, privacy: .public) trials=\(self.trialCount)")
+    }
+
+    // MARK: - Helpers
+
     public static func intervalName(forSemitones n: Int) -> String {
         switch n {
         case 1:  return "m2"
@@ -183,15 +186,6 @@ public final class SessionLogger {
         }
     }
 
-    public func endSession() {
-        session.endedAt = Date()
-        writeSession()
-        updateCumulative()
-        NotificationCenter.default.post(name: .earTrainSessionDidEnd, object: nil)
-    }
-
-    // MARK: - Private
-
     private func resultKey(_ r: ExerciseResult) -> String {
         switch r {
         case .correct:         return "correct"
@@ -201,75 +195,82 @@ public final class SessionLogger {
         }
     }
 
-    private func writeSession() {
-        let url = baseURL
-            .appendingPathComponent("sessions")
-            .appendingPathComponent("\(session.id).json")
-        if let data = try? Self.encoder.encode(session) {
-            try? data.write(to: url, options: .atomic)
-        }
-    }
+    // MARK: - Private DB writes
 
-    private func updateCumulative() {
-        let url = baseURL.appendingPathComponent("cumulative.json")
-        var stats = (try? SessionLogger.decoder.decode(CumulativeStats.self,
-                                              from: Data(contentsOf: url)))
-                    ?? CumulativeStats()
-
-        stats.lastUpdated   = Date()
-        stats.totalSessions += 1
-        stats.totalTrials   += session.trials.count
-
-        for trial in session.trials {
-            switch trial.exerciseType ?? "playback" {
-
-            case "contour":
-                var byRegister = stats.contour[trial.interval] ?? [:]
-                var counts     = byRegister[trial.register]   ?? ContourCounts()
-                counts.total += 1
-                if trial.result == "correct" { counts.correct += 1 }
-                byRegister[trial.register]      = counts
-                stats.contour[trial.interval]   = byRegister
-
-            default:  // "playback" and "identification" share the interval matrix
-                var byRegister = stats.matrix[trial.interval] ?? [:]
-                var counts     = byRegister[trial.register]  ?? RegisterCounts()
-                switch trial.result {
-                case "correct":          counts.correct         += 1
-                case "close":            counts.close           += 1
-                case "octave_displaced": counts.octaveDisplaced += 1
-                case "no_read":          counts.noRead          += 1
-                default:                 counts.wrong           += 1
-                }
-                byRegister[trial.register]   = counts
-                stats.matrix[trial.interval] = byRegister
+    private func insertSessionRow() {
+        do {
+            try db.dbQueue.write { d in
+                try d.execute(sql: """
+                    INSERT OR IGNORE INTO sessions
+                        (id, primitive, plan_id, plan_step, timbre, started_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    arguments: [sessionId, primitive, planId, planStep,
+                                timbre, Int(startedAt.timeIntervalSince1970)])
             }
-        }
-
-        if let data = try? Self.encoder.encode(stats) {
-            try? data.write(to: url, options: .atomic)
+        } catch {
+            sessionLog.error("Failed to insert session row: \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    private static let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.outputFormatting    = [.prettyPrinted, .sortedKeys]
-        e.dateEncodingStrategy = .iso8601
-        return e
-    }()
+    private func writeTrial(intervalName: String?,
+                            register: String?,
+                            note1Midi: Int?,
+                            note2Midi: Int?,
+                            semitoneGap: Int?,
+                            correct: Int,
+                            resultDetail: String,
+                            difficulty: Int) {
+        trialCount += 1
+        if correct == 1 { correctCount += 1 }
 
-    private static let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        return d
-    }()
+        // Build arguments explicitly so Swift doesn't lose Optional<Int> type info.
+        // GRDB array literals infer Optional<Int> as null; using .databaseValue is reliable.
+        let args: StatementArguments = [
+            sessionId, primitive,
+            Int(Date().timeIntervalSince1970), difficulty,
+            note1Midi?.databaseValue   ?? DatabaseValue.null,
+            note2Midi?.databaseValue   ?? DatabaseValue.null,
+            semitoneGap?.databaseValue ?? DatabaseValue.null,
+            intervalName?.databaseValue ?? DatabaseValue.null,
+            register?.databaseValue    ?? DatabaseValue.null,
+            correct, resultDetail
+        ]
+        do {
+            try db.dbQueue.write { d in
+                try d.execute(sql: """
+                    INSERT INTO trials
+                        (session_id, primitive, ts, difficulty,
+                         note1_midi, note2_midi, semitone_gap,
+                         interval_name, register, correct, result_detail)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    arguments: args)
+            }
+        } catch {
+            sessionLog.error("Failed to write trial: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func updateSessionRow() {
+        do {
+            try db.dbQueue.write { d in
+                try d.execute(sql: """
+                    UPDATE sessions
+                    SET ended_at = ?, total_trials = ?, correct_trials = ?
+                    WHERE id = ?
+                    """,
+                    arguments: [Int(Date().timeIntervalSince1970),
+                                trialCount, correctCount, sessionId])
+            }
+        } catch {
+            sessionLog.error("Failed to update session row: \(error.localizedDescription, privacy: .public)")
+        }
+    }
 }
 
 // MARK: - Notification name
 
 public extension Notification.Name {
-    /// Posted on the main queue after every session is written to disk.
-    /// ProgressStore observes this to auto-reload without a timing dependency
-    /// on SwiftUI's onAppear/onDisappear ordering.
     static let earTrainSessionDidEnd = Notification.Name("EarTrainSessionDidEnd")
 }

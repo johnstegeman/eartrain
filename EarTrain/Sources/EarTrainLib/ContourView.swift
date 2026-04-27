@@ -33,12 +33,19 @@ public struct ContourView: View {
             } else {
                 VStack(spacing: 0) {
                     endSessionBar
-                    VStack(spacing: 32) {
+                    VStack(spacing: 0) {
                         scorePanel
-                        statusPanel
-                        answerButtons
+                            .padding(.top, 8)
+                        Spacer(minLength: 20)
+                        VStack(spacing: 28) {
+                            statusPanel
+                            answerButtons
+                        }
+                        Spacer(minLength: 20)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .overlay(alignment: .bottom) {
                     AudieChatPanel(companion: companion)
                 }
             }
@@ -62,27 +69,14 @@ public struct ContourView: View {
     }
 
     private var endSessionBar: some View {
-        HStack {
-            VolumeSlider(volume: $audio.outputVolume)
-            Spacer()
-            DifficultyControl(level: vm.difficultyLevel,
-                              descriptions: vm.difficultyDescriptions) { level in
-                vm.difficultyLevel = level
-            }
-            .padding(.trailing, 6)
-            if let secs = vm.timeRemainingSeconds {
-                Text(formatTime(secs))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(secs < 60 ? EarTrainColors.error : EarTrainColors.textDisabled)
-                    .padding(.trailing, 8)
-            }
-            Button("End Session") { endSession() }
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(EarTrainColors.textDisabled)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
+        ExerciseSessionBar(
+            volume: $audio.outputVolume,
+            difficultyLevel: vm.difficultyLevel,
+            difficultyDescriptions: vm.difficultyDescriptions,
+            timeRemainingSeconds: vm.timeRemainingSeconds,
+            onDifficultyChange: { vm.difficultyLevel = $0 },
+            onEnd: endSession
+        )
     }
 
     private func endSession() {
@@ -116,11 +110,21 @@ public struct ContourView: View {
 
     // MARK: - Status
 
+    private var phaseIndex: Int {
+        switch vm.phase {
+        case .idle:           return 0
+        case .playing:        return 1
+        case .awaitingAnswer: return 2
+        case .result:         return 3
+        }
+    }
+
     private var statusPanel: some View {
         Group {
             switch vm.phase {
             case .idle:
                 statusText("Ready", color: EarTrainColors.textSecondary)
+                    .transition(.opacity)
             case .playing:
                 HStack(spacing: 8) {
                     Image(systemName: "speaker.wave.2.fill")
@@ -128,21 +132,16 @@ public struct ContourView: View {
                 }
                 .foregroundColor(EarTrainColors.accent)
                 .font(.system(size: 16, weight: .semibold))
+                .transition(.opacity)
             case .awaitingAnswer:
                 VStack(spacing: 4) {
                     Text("Was the second note…")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(EarTrainColors.textPrimary)
-                    Text("Replay")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(EarTrainColors.accent)
-                        .cornerRadius(6)
-                        .contentShape(Rectangle())
-                        .onTapGesture { vm.replayPair() }
+                    Button("Replay") { vm.replayPair() }
+                        .buttonStyle(AccentButtonStyle())
                 }
+                .transition(.opacity)
             case .result(let correct, let answer):
                 VStack(spacing: 8) {
                     resultBadge(correct: correct, answer: answer)
@@ -151,11 +150,29 @@ public struct ContourView: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(EarTrainColors.accent)
                             .contentShape(Rectangle())
-                            .onTapGesture { vm.replayAfterResult() }
+                            .onTapGesture {
+                                // Capture notes BEFORE replayAfterResult() sets phase=.playing
+                                let shouldReveal = vm.recordWrongReplay()
+                                let notes     = vm.currentNoteNames
+                                let direction = vm.currentDirectionText
+                                let midi      = vm.currentNoteMidiPair
+                                vm.replayAfterResult()
+                                if shouldReveal, let notes {
+                                    companion.revealContourNotes(
+                                        firstNote: notes.first,
+                                        secondNote: notes.second,
+                                        direction: direction,
+                                        note1Midi: midi.note1,
+                                        note2Midi: midi.note2
+                                    )
+                                }
+                            }
                     }
                 }
+                .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: phaseIndex)
         .frame(minHeight: 72)
     }
 
@@ -181,7 +198,7 @@ public struct ContourView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background((correct ? EarTrainColors.success : EarTrainColors.error).opacity(0.12))
-        .cornerRadius(10)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Answer buttons
@@ -196,14 +213,27 @@ public struct ContourView: View {
     }
 
     private func contourButton(_ contour: ContourViewModel.Contour, disabled: Bool) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: contour.icon)
-                .font(.system(size: 22))
-            Text(contour.label)
-                .font(.system(size: 14, weight: .semibold))
+        Button {
+            vm.answer(contour) { correct in
+                let context = TrialContext(areaName: vm.currentRegisterName)
+                companion.recordOutcome(correct: correct, context: context)
+                let isNewBest = store.updateStreakIfRecord(modeKey: "contour",
+                                                          difficulty: vm.difficultyLevel,
+                                                          streak: companion.currentStreak)
+                if isNewBest { companion.announcePersonalBest(streak: companion.currentStreak) }
+            }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: contour.icon)
+                    .font(.system(size: 22))
+                Text(contour.label)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .frame(width: 90, height: 72)
+            .contentShape(Rectangle())
         }
-        .frame(width: 90, height: 72)
         .foregroundColor(EarTrainColors.textPrimary)
+        .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(EarTrainColors.surface)
@@ -213,26 +243,9 @@ public struct ContourView: View {
                 )
         )
         .opacity(disabled ? 0.4 : 1)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if !disabled {
-                vm.answer(contour) { correct in
-                    let context = TrialContext(areaName: vm.currentRegisterName)
-                    companion.recordOutcome(correct: correct, context: context)
-                    let isNewBest = store.updateStreakIfRecord(modeKey: "contour",
-                                                              difficulty: vm.difficultyLevel,
-                                                              streak: companion.currentStreak)
-                    if isNewBest { companion.announcePersonalBest(streak: companion.currentStreak) }
-                }
-            }
-        }
+        .disabled(disabled)
     }
 
-    private func formatTime(_ seconds: Int) -> String {
-        let m = seconds / 60
-        let s = seconds % 60
-        return String(format: "%d:%02d", m, s)
-    }
 }
 
 // MARK: - Button style (shared with IdentificationView)

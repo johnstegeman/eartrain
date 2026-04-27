@@ -7,6 +7,35 @@ audio engineering discoveries, and links to supporting research where available.
 
 ## CI Perception
 
+### Contour difficulty has two separable axes: interval size and register/frequency
+
+**Observed (2026-04-27):** User consistently got a specific note pair wrong (G#4 → F#5,
+a 10-semitone / minor 7th ascending interval in the high register) even after multiple
+replays. When told the note names, they recognized the pair was in a frequency range
+that is subjectively confusing with their CI.
+
+**Insight:** For CI users, contour errors have at least two independent root causes:
+1. **Interval type** — large intervals (7–12 semitones) can be hard regardless of register
+2. **Frequency/register** — specific frequency ranges may be poorly discriminated by their
+   CI processor's channel mapping, making contour in those ranges hard at ANY interval size
+3. **Combination** — large intervals specifically in a problematic frequency band
+
+The Phase 1.7 bucket grid (semitone-gap-group × octave-band) is designed to disentangle
+these. Aggregate error data should eventually allow Audie to say: "Your error rate on
+large intervals in the high register is 73% vs 24% everywhere else — this is frequency-
+map difficulty, not interval-type difficulty."
+
+**For adaptive training:** Flagged note pairs (user-reported via "Flag as tricky") are a
+strong prior signal. They should feed both the ContourSampler weights AND the per-bucket
+error rate used by the mastery engine.
+
+**Supporting research:** CI pitch discrimination thresholds average 7.6 semitones vs 1.1
+for normal hearing (meta-analysis, PMC10603281). A 5-semitone natural breakpoint exists
+for MMN cortical responses in CI users. Both suggest that frequency-channel crowding in
+specific registers is a real clinical phenomenon, not user error.
+
+---
+
 ### Pure sine tones sound "distorted" in the middle — this is expected CI perception
 
 **Observed:** When playing a pure sine tone (e.g. A4 → E5 interval), the user reported

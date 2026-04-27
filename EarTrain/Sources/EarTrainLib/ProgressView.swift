@@ -61,10 +61,11 @@ public struct ProgressView: View {
 
     private var streakSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("BEST STREAKS")
+            Text("Best Streaks")
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(0.8)
                 .foregroundColor(EarTrainColors.textSecondary)
+                .textCase(.uppercase)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 220))], spacing: 8) {
                 ForEach(store.allStreakRecords) { record in
@@ -95,7 +96,7 @@ public struct ProgressView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(EarTrainColors.surface)
-                    .cornerRadius(10)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
         }
@@ -117,7 +118,7 @@ public struct ProgressView: View {
         }
         .padding(16)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func contourIntervalRow(_ intervalName: String) -> some View {
@@ -137,7 +138,7 @@ public struct ProgressView: View {
                             .fill(EarTrainColors.bg)
                             .frame(height: 8)
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(accuracyColor(c.accuracy))
+                            .fill(EarTrainColors.accuracy(c.accuracy))
                             .frame(width: geo.size.width * CGFloat(c.accuracy), height: 8)
                     }
                 }
@@ -145,7 +146,7 @@ public struct ProgressView: View {
 
                 Text("\(Int(c.accuracy * 100))%")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(accuracyColor(c.accuracy))
+                    .foregroundColor(EarTrainColors.accuracy(c.accuracy))
                     .frame(width: 36, alignment: .trailing)
 
                 Text("\(c.total)")
@@ -197,7 +198,7 @@ public struct ProgressView: View {
             if let acc = store.overallAccuracy {
                 statPill(label: "Overall",
                          value: "\(Int(acc * 100))%",
-                         color: accuracyColor(acc))
+                         color: EarTrainColors.accuracy(acc))
             }
             Spacer()
         }
@@ -217,7 +218,7 @@ public struct ProgressView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(EarTrainColors.surface)
-        .cornerRadius(10)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Heatmap
@@ -251,7 +252,7 @@ public struct ProgressView: View {
         }
         .padding(16)
         .background(EarTrainColors.surface)
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func intervalRow(_ interval: Interval) -> some View {
@@ -310,7 +311,7 @@ public struct ProgressView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 52)
             .background(cellBackground(accuracy: hasData ? accuracy : nil))
-            .cornerRadius(8)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
     }
@@ -319,7 +320,7 @@ public struct ProgressView: View {
         guard let acc = accuracy ?? nil else {
             return EarTrainColors.surface.opacity(0.6)  // no data
         }
-        return accuracyColor(acc).opacity(0.85)
+        return EarTrainColors.accuracy(acc).opacity(0.85)
     }
 
     // MARK: - Legend
@@ -346,11 +347,6 @@ public struct ProgressView: View {
 
     // MARK: - Helpers
 
-    private func accuracyColor(_ accuracy: Double) -> Color {
-        if accuracy >= 0.80 { return EarTrainColors.success }
-        if accuracy >= 0.50 { return EarTrainColors.accent }
-        return EarTrainColors.error
-    }
 }
 
 // MARK: - Cell identity (for sheet)
@@ -411,27 +407,9 @@ private struct DrillDownSheet: View {
                         let acc = Double(c.correct) / Double(c.total)
                         Text("\(Int(acc * 100))% (\(c.correct)/\(c.total))")
                             .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(accuracyColor(Double(c.correct) / Double(c.total)))
+                            .foregroundColor(EarTrainColors.accuracy(Double(c.correct) / Double(c.total)))
                     }
                     Spacer()
-                }
-
-                // Drill This placeholder
-                if c.total >= 5 {
-                    Text("Drill This")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(EarTrainColors.accent)
-                        .cornerRadius(6)
-                        .opacity(0.5)  // greyed — Drill My Misses not yet implemented
-                        .overlay(
-                            Text("Available in a future update")
-                                .font(.system(size: 10))
-                                .foregroundColor(EarTrainColors.textSecondary)
-                                .offset(y: 22)
-                        )
                 }
 
             } else {
@@ -460,11 +438,6 @@ private struct DrillDownSheet: View {
         }
     }
 
-    private func accuracyColor(_ accuracy: Double) -> Color {
-        if accuracy >= 0.80 { return EarTrainColors.success }
-        if accuracy >= 0.50 { return EarTrainColors.accent }
-        return EarTrainColors.error
-    }
 }
 
 private extension EarTrainColors {
