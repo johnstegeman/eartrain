@@ -14,6 +14,14 @@ public struct SettingsView: View {
     @State private var showClearStreaksConfirm = false
     @State private var showClearAllConfirm = false
 
+    // Mastery gate controls — backed by MasterySettings / UserDefaults
+    @State private var masteryAccuracy:    Double = MasterySettings.accuracyThreshold
+    @State private var masteryMinTrials:   Double = Double(MasterySettings.minTrialsPerBucket)
+    @State private var masteryMinDiff:     Double = Double(MasterySettings.minDifficulty)
+    @State private var masteryWindow:      Double = Double(MasterySettings.recencyWindow)
+    @State private var masteryReqGap12:    Bool   = MasterySettings.requireGap1_2
+    @State private var masterySoftAt:      Double = Double(MasterySettings.softAdvanceAt)
+
     private var selectedTimbre: GuitarTimbre {
         GuitarTimbre(rawValue: timbreRaw) ?? .sine
     }
@@ -45,12 +53,13 @@ public struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     deviceSection
                     toneSection
+                    masterySection
                     dataSection
                 }
                 .padding(32)
             }
         }
-        .frame(width: 540, height: 600)
+        .frame(width: 540, height: 700)
         .background(EarTrainColors.bg)
         .onAppear { reloadDevices() }
     }
@@ -139,6 +148,75 @@ public struct SettingsView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Mastery gates section
+
+    private var masterySection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeader("Mastery Gates")
+
+            masteryRow(label: "Accuracy required (per bucket)",
+                       value: "\(Int(masteryAccuracy * 100))%") {
+                Slider(value: $masteryAccuracy, in: 0.60...0.95, step: 0.05)
+                    .frame(maxWidth: 180)
+                    .onChange(of: masteryAccuracy) { MasterySettings.accuracyThreshold = $0 }
+            }
+
+            masteryRow(label: "Min trials per bucket",
+                       value: "\(Int(masteryMinTrials))") {
+                Stepper("", value: $masteryMinTrials, in: 5...30, step: 1)
+                    .onChange(of: masteryMinTrials) { MasterySettings.minTrialsPerBucket = Int($0) }
+            }
+
+            masteryRow(label: "Min difficulty to count",
+                       value: "\(Int(masteryMinDiff))") {
+                Stepper("", value: $masteryMinDiff, in: 1...5, step: 1)
+                    .onChange(of: masteryMinDiff) { MasterySettings.minDifficulty = Int($0) }
+            }
+
+            masteryRow(label: "Recency window (trials)",
+                       value: "\(Int(masteryWindow))") {
+                Stepper("", value: $masteryWindow, in: 10...50, step: 5)
+                    .onChange(of: masteryWindow) { MasterySettings.recencyWindow = Int($0) }
+            }
+
+            masteryRow(label: "Require 1–2 semitone buckets",
+                       value: masteryReqGap12 ? "On" : "Off") {
+                Toggle("", isOn: $masteryReqGap12)
+                    .toggleStyle(.switch)
+                    .tint(EarTrainColors.accent)
+                    .onChange(of: masteryReqGap12) { MasterySettings.requireGap1_2 = $0 }
+            }
+
+            masteryRow(label: "\"Advance anyway\" after N trials",
+                       value: "\(Int(masterySoftAt))") {
+                Stepper("", value: $masterySoftAt, in: 40...200, step: 10)
+                    .onChange(of: masterySoftAt) { MasterySettings.softAdvanceAt = Int($0) }
+            }
+
+            Text("These thresholds control when the curriculum advances. The difficulty gate is a floor — you can always keep working at higher difficulty in Freeplay.")
+                .font(.system(size: 11))
+                .foregroundColor(EarTrainColors.textDisabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func masteryRow<Control: View>(label: String, value: String,
+                                           @ViewBuilder control: () -> Control) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.system(size: 13))
+                    .foregroundColor(EarTrainColors.textPrimary)
+                Text(value)
+                    .font(.system(size: 11))
+                    .foregroundColor(EarTrainColors.accent)
+            }
+            Spacer()
+            control()
+        }
+        .padding(.vertical, 4)
     }
 
     // MARK: - Data section
