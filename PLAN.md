@@ -248,6 +248,34 @@ and no-active-plan (Drill My Misses is primary). See `DESIGN_SYSTEM.md` for layo
 
 ---
 
+## Phase 1.6 — SQLite via GRDB `next`
+
+Replace JSON session storage with a single GRDB SQLite database (`audie.db`).
+All primitives log to a universal `trials` table with `difficulty`, `note1_midi`,
+`note2_midi`, `semitone_gap` columns. A `sessions` table tracks plan attribution
+(`plan_id`, `plan_step`) — switching plans ends the current session and starts a new one.
+JSON files are kept as a read-only legacy fallback; the parallel JSON write path is
+removed at the end of Phase 1.7.
+
+**Migration guide:** `MIGRATION_1_6.md`
+**Unblocks:** Phase 1.7 (mastery engine requires per-trial DB rows with difficulty + MIDI data)
+
+---
+
+## Phase 1.7 — Mastery Engine + Weighted Sampler `planned`
+
+Contour mastery check using a 4×4 (semitone-gap-group × octave-band) bucket grid with
+configurable thresholds (accuracy %, min trials, min difficulty, recency window).
+Per-pair problem tracking: specific note pairs with low recent accuracy get higher weight
+in `ContourSampler`. Soft advance after N trials below gate. Difficulty gate is a floor,
+not a ceiling. Settings UI for all thresholds.
+
+**Migration guide:** `MIGRATION_1_7.md`
+**Depends on:** Phase 1.6 complete (trials table with difficulty + MIDI data populated)
+**Unblocks:** Interval-id and interval-playback mastery (same pattern, Phase 2+)
+
+---
+
 ## Phase 2 — Lesson Architecture + New Primitives
 
 ### 2.0 — Adaptive difficulty engine `planned`

@@ -15,6 +15,10 @@ let package = Package(
             url: "https://github.com/AudioKit/AudioKit",
             from: "5.6.0"
         ),
+        .package(
+            url: "https://github.com/groue/GRDB.swift",
+            from: "6.0.0"
+        ),
     ],
     targets: [
         // Executable — @main entry point only, imports EarTrainLib
@@ -37,6 +41,7 @@ let package = Package(
             name: "EarTrainLib",
             dependencies: [
                 .product(name: "AudioKit", package: "AudioKit"),
+                .product(name: "GRDB", package: "GRDB.swift"),
             ],
             path: "Sources/EarTrainLib",
             resources: [.copy("Samples"), .copy("Samples_normalized"), .process("audie.png"), .copy("Audie.icns")]
