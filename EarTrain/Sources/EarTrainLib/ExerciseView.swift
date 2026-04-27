@@ -84,7 +84,11 @@ public struct ExerciseView: View {
             }
             Button("End Session") { endSession() }
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(EarTrainColors.textDisabled)
+                .foregroundColor(EarTrainColors.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(EarTrainColors.surface)
+                .cornerRadius(6)
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)
