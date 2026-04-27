@@ -134,11 +134,23 @@ public struct ExerciseView: View {
 
     // MARK: - Status
 
+    private var phaseIndex: Int {
+        switch vm.phase {
+        case .idle:             return 0
+        case .playing:          return 1
+        case .awaitingRoot:     return 2
+        case .awaitingInterval: return 3
+        case .result:           return 4
+        case .noRead:           return 5
+        }
+    }
+
     private var statusPanel: some View {
         Group {
             switch vm.phase {
             case .idle:
                 statusText("Ready", color: EarTrainColors.textSecondary)
+                    .transition(.opacity)
             case .playing:
                 HStack(spacing: 8) {
                     Image(systemName: "speaker.wave.2.fill")
@@ -146,6 +158,7 @@ public struct ExerciseView: View {
                 }
                 .foregroundColor(EarTrainColors.accent)
                 .font(.system(size: 16, weight: .semibold))
+                .transition(.opacity)
             case .awaitingRoot:
                 HStack(spacing: 8) {
                     Image(systemName: "mic.fill")
@@ -153,6 +166,7 @@ public struct ExerciseView: View {
                 }
                 .foregroundColor(EarTrainColors.textPrimary)
                 .font(.system(size: 16, weight: .semibold))
+                .transition(.opacity)
             case .awaitingInterval:
                 HStack(spacing: 8) {
                     Image(systemName: "mic.fill")
@@ -160,8 +174,10 @@ public struct ExerciseView: View {
                 }
                 .foregroundColor(EarTrainColors.accent)
                 .font(.system(size: 16, weight: .semibold))
+                .transition(.opacity)
             case .result(let result):
                 resultBadge(result)
+                    .transition(.opacity)
             case .noRead:
                 VStack(spacing: 8) {
                     Text("Couldn't detect pitch")
@@ -171,8 +187,10 @@ public struct ExerciseView: View {
                         .font(.system(size: 12))
                         .foregroundColor(EarTrainColors.textDisabled)
                 }
+                .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: phaseIndex)
         .frame(height: 60)
     }
 

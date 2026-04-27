@@ -120,11 +120,21 @@ public struct ContourView: View {
 
     // MARK: - Status
 
+    private var phaseIndex: Int {
+        switch vm.phase {
+        case .idle:           return 0
+        case .playing:        return 1
+        case .awaitingAnswer: return 2
+        case .result:         return 3
+        }
+    }
+
     private var statusPanel: some View {
         Group {
             switch vm.phase {
             case .idle:
                 statusText("Ready", color: EarTrainColors.textSecondary)
+                    .transition(.opacity)
             case .playing:
                 HStack(spacing: 8) {
                     Image(systemName: "speaker.wave.2.fill")
@@ -132,6 +142,7 @@ public struct ContourView: View {
                 }
                 .foregroundColor(EarTrainColors.accent)
                 .font(.system(size: 16, weight: .semibold))
+                .transition(.opacity)
             case .awaitingAnswer:
                 VStack(spacing: 4) {
                     Text("Was the second note…")
@@ -147,6 +158,7 @@ public struct ContourView: View {
                         .contentShape(Rectangle())
                         .onTapGesture { vm.replayPair() }
                 }
+                .transition(.opacity)
             case .result(let correct, let answer):
                 VStack(spacing: 8) {
                     resultBadge(correct: correct, answer: answer)
@@ -158,8 +170,10 @@ public struct ContourView: View {
                             .onTapGesture { vm.replayAfterResult() }
                     }
                 }
+                .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: phaseIndex)
         .frame(minHeight: 72)
     }
 
