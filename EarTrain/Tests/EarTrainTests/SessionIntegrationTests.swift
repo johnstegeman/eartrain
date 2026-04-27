@@ -167,8 +167,9 @@ final class SessionIntegrationTests: XCTestCase {
         logger.endSession()
         store.reload()
 
-        // 10 trials is below the 30-trial minimum for mastery
-        XCTAssertFalse(store.hasContourMastery)
+        // 10 trials is below any mastery gate threshold
+        let (state, _) = MasteryEngine.evaluate()
+        XCTAssertNotEqual(state, .gateCleared)
     }
 
     func testContourTotalTrialsAggregatesAcrossIntervals() async throws {
@@ -185,6 +186,6 @@ final class SessionIntegrationTests: XCTestCase {
         logger.endSession()
         store.reload()
 
-        XCTAssertEqual(store.contourTotalTrials, 15)
+        XCTAssertEqual(store.dbTrialCount(primitive: "contour"), 15)
     }
 }

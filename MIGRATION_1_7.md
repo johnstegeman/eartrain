@@ -1,6 +1,17 @@
 # Migration 1.7 — Mastery Engine + Weighted Sampler
 
-**Status: PENDING**
+**Status: COMPLETE — landed 2026-04-27.**
+
+| Step | Notes |
+|---|---|
+| 1 — MasterySettings | `MasterySettings.swift` |
+| 2 — MasteryEngine | `MasteryEngine.swift` |
+| 3 — ContourSampler | `ContourSampler.swift` |
+| 4 — Wire ContourSampler | `ContourViewModel.swift` |
+| 5 — ProgressStore recommendation | `ProgressStore.todayRecommendation` |
+| 6 — Soft advance UX | `HomeView.swift` |
+| 7 — Settings UI | `SettingsView.swift` masterySection |
+| 8 — Remove JSON writes | **Already done in Phase 1.6** — SessionLogger was fully rewritten |
 **Depends on: MIGRATION_1_6.md complete** — specifically the `trials` table with `difficulty`,
 `note1_midi`, `note2_midi`, and `semitone_gap` columns populated.
 

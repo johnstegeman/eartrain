@@ -1,6 +1,8 @@
 # TODOS
 
 ## ~~Navigation refactor (Phase 1.5)~~ DONE — see MIGRATION_NAV_PHASE_1_5.md
+## ~~Phase 1.6 SQLite via GRDB~~ DONE — see MIGRATION_1_6.md
+## ~~Phase 1.7 Mastery engine + weighted sampler~~ DONE — see MIGRATION_1_7.md
 
 
 
