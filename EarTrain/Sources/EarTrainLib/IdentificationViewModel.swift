@@ -33,6 +33,7 @@ public final class IdentificationViewModel: ObservableObject, DifficultyAdjustab
     /// 1 = easiest (2-interval pool, maximally different), 5 = hardest (6-interval pool).
     @Published public var difficultyLevel: Int = 3 {
         didSet {
+            UserDefaults.standard.set(difficultyLevel, forKey: "difficultyLevel_identification")
             // If the current focus interval fell out of the new pool, pick a new one.
             if !activeIntervals.contains(focusInterval) {
                 focusInterval = activeIntervals.randomElement() ?? .P5
@@ -96,6 +97,8 @@ public final class IdentificationViewModel: ObservableObject, DifficultyAdjustab
 
     public init(audio: any AudioPlaying) {
         self.audio = audio
+        let saved = UserDefaults.standard.integer(forKey: "difficultyLevel_identification")
+        if saved > 0 { difficultyLevel = saved }
     }
 
     // MARK: - Session lifecycle

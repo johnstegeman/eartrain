@@ -99,6 +99,8 @@ public struct ContentView: View {
         switch mode {
         case .home:
             HomeView(store: session.progressStore, activeMode: $mode, selectedDuration: $sessionDuration)
+        case .tuner:
+            TunerView(audio: session.audio)
         case .intervals:
             if mic.isBlocked {
                 MicBlockedView(openSettings: mic.openSystemSettings)
@@ -129,8 +131,9 @@ public struct ContentView: View {
 
 public enum AppMode: CaseIterable {
     case home
-    case intervals
+    case tuner
     case contour
+    case intervals
     case identification
     case progress
     case settings
@@ -138,6 +141,7 @@ public enum AppMode: CaseIterable {
     public var label: String {
         switch self {
         case .home:           return "Home"
+        case .tuner:          return "Tune"
         case .intervals:      return "Intervals"
         case .contour:        return "Contour"
         case .identification: return "Identify"
@@ -149,6 +153,7 @@ public enum AppMode: CaseIterable {
     public var icon: String {
         switch self {
         case .home:           return "house.fill"
+        case .tuner:          return "tuningfork"
         case .intervals:      return "guitars.fill"
         case .contour:        return "arrow.up.arrow.down"
         case .identification: return "ear.fill"
@@ -160,6 +165,7 @@ public enum AppMode: CaseIterable {
     public var exerciseDescription: String {
         switch self {
         case .home:           return ""
+        case .tuner:          return "Check your tuning before you practice"
         case .intervals:      return "Play back intervals on your guitar — mic grades your response"
         case .contour:        return "Higher, lower, or same? The simplest pitch discrimination exercise"
         case .identification: return "Hear an interval and identify it by ear only"
@@ -221,11 +227,12 @@ private struct MicBlockedView: View {
 // MARK: - Design tokens
 
 public enum EarTrainColors {
-    public static let bg       = Color(hex: "#1a1a1a")
-    public static let surface  = Color(hex: "#232323")
-    public static let accent   = Color(hex: "#f5a623")
-    public static let success  = Color(hex: "#4ade80")
-    public static let error    = Color(hex: "#ef4444")
+    public static let bg           = Color(hex: "#1a1a1a")
+    public static let surface      = Color(hex: "#232323")
+    public static let accent       = Color(hex: "#f5a623")
+    public static let success      = Color(hex: "#4ade80")
+    public static let inTuneFlash  = Color(hex: "#86efac")  // brighter green for steady in-tune
+    public static let error        = Color(hex: "#ef4444")
     public static let textPrimary   = Color(hex: "#e0e0e0")
     public static let textSecondary = Color(hex: "#888888")
     public static let textDisabled  = Color(hex: "#555555")

@@ -58,7 +58,9 @@ public final class ContourViewModel: ObservableObject, DifficultyAdjustable {
     @Published public var correctTrials: Int = 0
 
     /// 1 = easiest (wide gaps), 5 = hardest (narrow gaps).
-    @Published public var difficultyLevel: Int = 3
+    @Published public var difficultyLevel: Int = 3 {
+        didSet { UserDefaults.standard.set(difficultyLevel, forKey: "difficultyLevel_contour") }
+    }
 
     /// Non-nil when a session is running with a time limit. Counts down to 0.
     @Published public var timeRemainingSeconds: Int? = nil
@@ -177,6 +179,8 @@ public final class ContourViewModel: ObservableObject, DifficultyAdjustable {
 
     public init(audio: any AudioPlaying) {
         self.audio = audio
+        let saved = UserDefaults.standard.integer(forKey: "difficultyLevel_contour")
+        if saved > 0 { difficultyLevel = saved }
     }
 
     // MARK: - Session lifecycle

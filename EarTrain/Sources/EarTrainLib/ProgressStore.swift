@@ -1,5 +1,14 @@
 import Foundation
 
+// MARK: - Today's recommendation
+
+public struct TodayRecommendation {
+    public let mode: AppMode
+    public let headline: String
+    public let reason: String
+    public let cta: String
+}
+
 /// A single all-time personal-best streak record.
 public struct StreakRecord: Identifiable {
     public var id: String { "\(modeKey)_\(difficulty)" }
@@ -35,7 +44,10 @@ public final class ProgressStore: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.reload() }
+            Task { @MainActor [weak self] in
+                UserDefaults.standard.set(Date(), forKey: "lastSessionDate")
+                self?.reload()
+            }
         }
     }
 
@@ -125,6 +137,79 @@ public final class ProgressStore: ObservableObject {
         return Double(totalCorrect) / Double(total)
     }
 
+    // MARK: - Today's recommendation
+
+    /// True if the user completed at least one session today.
+    public var practicedToday: Bool {
+        guard let last = UserDefaults.standard.object(forKey: "lastSessionDate") as? Date else {
+            return false
+        }
+        return Calendar.current.isDateInToday(last)
+    }
+
+    /// What Audie recommends doing right now, derived from the user's gap analysis.
+    public var todayRecommendation: TodayRecommendation {
+        let hasIntervalData = !stats.matrix.isEmpty
+
+        // New user: start simple
+        if stats.totalSessions == 0 {
+            return TodayRecommendation(
+                mode: .contour,
+                headline: "Start with Contour",
+                reason: "Hearing whether a note goes up or down is the foundation. Start here.",
+                cta: "Begin"
+            )
+        }
+
+        // Specific drillable weakness (≥5 trials, >35% errors)
+        if let hit = topConfusionBuckets(limit: 1).first, hit.errorRate > 0.35 {
+            let pct = Int(hit.errorRate * 100)
+            return TodayRecommendation(
+                mode: .intervals,
+                headline: "Drill \(hit.intervalName) — \(hit.registerName) register",
+                reason: "\(pct)% error rate. Targeted reps here beat random practice.",
+                cta: "Drill This"
+            )
+        }
+
+        // Has contour data but hasn't touched intervals yet
+        if !hasIntervalData {
+            return TodayRecommendation(
+                mode: .intervals,
+                headline: "Try Interval Training",
+                reason: "You've built pitch direction with Contour — time to name the intervals.",
+                cta: "Start"
+            )
+        }
+
+        // Has intervals but hasn't tried contour
+        if !hasContourData {
+            return TodayRecommendation(
+                mode: .contour,
+                headline: "Try Contour Training",
+                reason: "Trains pitch direction directly — complements your interval work.",
+                cta: "Try It"
+            )
+        }
+
+        // Below 70% accuracy: keep drilling intervals
+        if let acc = overallAccuracy, acc < 0.70 {
+            return TodayRecommendation(
+                mode: .intervals,
+                headline: "Keep Drilling Intervals",
+                reason: "Accuracy at \(Int(acc * 100))% — consistent reps is how it climbs.",
+                cta: "Start Session"
+            )
+        }
+
+        return TodayRecommendation(
+            mode: .intervals,
+            headline: "Keep Building",
+            reason: "Steady daily practice compounds. Even 10 minutes moves the needle.",
+            cta: "Start Session"
+        )
+    }
+
     // MARK: - Streak records (UserDefaults-backed, keyed by "modeKey_difficulty")
 
     /// Returns the all-time best consecutive-correct streak for a given mode + difficulty.
@@ -170,6 +255,21 @@ public final class ProgressStore: ObservableObject {
             defaults.removeObject(forKey: key)
         }
         objectWillChange.send()
+    }
+
+    /// Deletes cumulative.json, all session files, and clears the last-session date.
+    /// Resets in-memory stats so the UI reflects the clean state immediately.
+    public func clearAllProgress() {
+        let appSupportAudie = Self.cumulativeURL.deletingLastPathComponent()
+        try? FileManager.default.removeItem(at: Self.cumulativeURL)
+        let sessionsDir = appSupportAudie.appendingPathComponent("sessions")
+        try? FileManager.default.removeItem(at: sessionsDir)
+        UserDefaults.standard.removeObject(forKey: "lastSessionDate")
+        UserDefaults.standard.removeObject(forKey: "difficultyLevel_contour")
+        UserDefaults.standard.removeObject(forKey: "difficultyLevel_intervals")
+        UserDefaults.standard.removeObject(forKey: "difficultyLevel_identification")
+        clearAllStreakRecords()
+        stats = SessionLogger.CumulativeStats()
     }
 
     private func streakKey(_ modeKey: String, _ difficulty: Int) -> String {
