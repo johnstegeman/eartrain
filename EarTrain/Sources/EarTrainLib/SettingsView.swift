@@ -153,47 +153,65 @@ public struct SettingsView: View {
     // MARK: - Mastery gates section
 
     private var masterySection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionHeader("Mastery Gates")
 
-            masteryRow(label: "Accuracy required (per bucket)",
-                       value: "\(Int(masteryAccuracy * 100))%") {
+            // Accuracy — slider (wide enough to be usable)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Accuracy required (per bucket)")
+                        .font(.system(size: 13))
+                        .foregroundColor(EarTrainColors.textPrimary)
+                    Spacer()
+                    Text("\(Int(masteryAccuracy * 100))%")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(EarTrainColors.accent)
+                        .frame(width: 36, alignment: .trailing)
+                }
                 Slider(value: $masteryAccuracy, in: 0.60...0.95, step: 0.05)
-                    .frame(maxWidth: 180)
+                    .tint(EarTrainColors.accent)
                     .onChange(of: masteryAccuracy) { MasterySettings.accuracyThreshold = $0 }
             }
+            .padding(.vertical, 2)
 
-            masteryRow(label: "Min trials per bucket",
-                       value: "\(Int(masteryMinTrials))") {
-                Stepper("", value: $masteryMinTrials, in: 5...30, step: 1)
-                    .onChange(of: masteryMinTrials) { MasterySettings.minTrialsPerBucket = Int($0) }
-            }
+            // Steppers replaced with +/− buttons for dark-mode visibility
+            masteryStepRow(label: "Min trials per bucket",
+                           value: Int(masteryMinTrials), unit: nil,
+                           range: 5...30, step: 1) { masteryMinTrials += $0
+                MasterySettings.minTrialsPerBucket = Int(masteryMinTrials) }
 
-            masteryRow(label: "Min difficulty to count",
-                       value: "\(Int(masteryMinDiff))") {
-                Stepper("", value: $masteryMinDiff, in: 1...5, step: 1)
-                    .onChange(of: masteryMinDiff) { MasterySettings.minDifficulty = Int($0) }
-            }
+            masteryStepRow(label: "Min difficulty to count",
+                           value: Int(masteryMinDiff), unit: "/ 5",
+                           range: 1...5, step: 1) { masteryMinDiff += $0
+                MasterySettings.minDifficulty = Int(masteryMinDiff) }
 
-            masteryRow(label: "Recency window (trials)",
-                       value: "\(Int(masteryWindow))") {
-                Stepper("", value: $masteryWindow, in: 10...50, step: 5)
-                    .onChange(of: masteryWindow) { MasterySettings.recencyWindow = Int($0) }
-            }
+            masteryStepRow(label: "Recency window",
+                           value: Int(masteryWindow), unit: "trials",
+                           range: 10...50, step: 5) { masteryWindow += $0
+                MasterySettings.recencyWindow = Int(masteryWindow) }
 
-            masteryRow(label: "Require 1–2 semitone buckets",
-                       value: masteryReqGap12 ? "On" : "Off") {
+            masteryStepRow(label: "\"Advance anyway\" after",
+                           value: Int(masterySoftAt), unit: "trials",
+                           range: 40...200, step: 10) { masterySoftAt += $0
+                MasterySettings.softAdvanceAt = Int(masterySoftAt) }
+
+            // Toggle
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Require 1–2 semitone buckets")
+                        .font(.system(size: 13))
+                        .foregroundColor(EarTrainColors.textPrimary)
+                    Text("Off by default — very hard for CI users")
+                        .font(.system(size: 11))
+                        .foregroundColor(EarTrainColors.textDisabled)
+                }
+                Spacer()
                 Toggle("", isOn: $masteryReqGap12)
                     .toggleStyle(.switch)
                     .tint(EarTrainColors.accent)
                     .onChange(of: masteryReqGap12) { MasterySettings.requireGap1_2 = $0 }
             }
-
-            masteryRow(label: "\"Advance anyway\" after N trials",
-                       value: "\(Int(masterySoftAt))") {
-                Stepper("", value: $masterySoftAt, in: 40...200, step: 10)
-                    .onChange(of: masterySoftAt) { MasterySettings.softAdvanceAt = Int($0) }
-            }
+            .padding(.vertical, 2)
 
             Text("These thresholds control when the curriculum advances. The difficulty gate is a floor — you can always keep working at higher difficulty in Freeplay.")
                 .font(.system(size: 11))
@@ -202,21 +220,40 @@ public struct SettingsView: View {
         }
     }
 
-    private func masteryRow<Control: View>(label: String, value: String,
-                                           @ViewBuilder control: () -> Control) -> some View {
+    /// A row with visible +/− buttons instead of the nearly-invisible macOS Stepper.
+    private func masteryStepRow(label: String, value: Int, unit: String?,
+                                 range: ClosedRange<Double>, step: Double,
+                                 onChange: @escaping (Double) -> Void) -> some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.system(size: 13))
-                    .foregroundColor(EarTrainColors.textPrimary)
-                Text(value)
-                    .font(.system(size: 11))
-                    .foregroundColor(EarTrainColors.accent)
-            }
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundColor(EarTrainColors.textPrimary)
             Spacer()
-            control()
+            HStack(spacing: 0) {
+                stepButton("−", enabled: Double(value) > range.lowerBound) { onChange(-step) }
+                Text(unit != nil ? "\(value) \(unit!)" : "\(value)")
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundColor(EarTrainColors.accent)
+                    .frame(minWidth: 56, alignment: .center)
+                stepButton("+", enabled: Double(value) < range.upperBound) { onChange(step) }
+            }
+            .background(EarTrainColors.bg)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
+    }
+
+    private func stepButton(_ label: String, enabled: Bool,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 16, weight: .medium))
+                .frame(width: 32, height: 28)
+                .foregroundColor(enabled ? EarTrainColors.textPrimary : EarTrainColors.textDisabled)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     // MARK: - Data section
