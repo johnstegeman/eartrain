@@ -10,6 +10,7 @@ public struct SettingsView: View {
     @State private var inputDevices:  [AudioDevice] = []
     @State private var outputDevices: [AudioDevice] = []
     @State private var showClearStreaksConfirm = false
+    @State private var showClearAllConfirm = false
 
     private var selectedTimbre: GuitarTimbre {
         GuitarTimbre(rawValue: timbreRaw) ?? .sine
@@ -129,28 +130,54 @@ public struct SettingsView: View {
             VStack(spacing: 0) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Clear streak records")
+                        Text("Reset all progress")
                             .font(.system(size: 14))
                             .foregroundColor(EarTrainColors.textPrimary)
-                        Text("Removes all personal-best streak data")
+                        Text("Deletes sessions, accuracy data, and streaks")
                             .font(.system(size: 11))
                             .foregroundColor(EarTrainColors.textSecondary)
                     }
                     Spacer()
-                    Button("Clear") {
-                        showClearStreaksConfirm = true
-                    }
-                    .foregroundColor(.red)
-                    .confirmationDialog("Clear all streak records?",
-                                        isPresented: $showClearStreaksConfirm,
-                                        titleVisibility: .visible) {
-                        Button("Clear Records", role: .destructive) {
-                            store.clearAllStreakRecords()
+                    Button("Reset") { showClearAllConfirm = true }
+                        .foregroundColor(.red)
+                        .confirmationDialog("Reset all progress?",
+                                            isPresented: $showClearAllConfirm,
+                                            titleVisibility: .visible) {
+                            Button("Reset Everything", role: .destructive) {
+                                store.clearAllProgress()
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("This permanently deletes your session history, accuracy data, and streak records. It can't be undone.")
                         }
-                        Button("Cancel", role: .cancel) {}
-                    } message: {
-                        Text("This can't be undone.")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                Divider().background(EarTrainColors.border)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Clear streak records only")
+                            .font(.system(size: 14))
+                            .foregroundColor(EarTrainColors.textPrimary)
+                        Text("Keeps session history, removes personal bests")
+                            .font(.system(size: 11))
+                            .foregroundColor(EarTrainColors.textSecondary)
                     }
+                    Spacer()
+                    Button("Clear") { showClearStreaksConfirm = true }
+                        .foregroundColor(.red)
+                        .confirmationDialog("Clear all streak records?",
+                                            isPresented: $showClearStreaksConfirm,
+                                            titleVisibility: .visible) {
+                            Button("Clear Records", role: .destructive) {
+                                store.clearAllStreakRecords()
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("This can't be undone.")
+                        }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)

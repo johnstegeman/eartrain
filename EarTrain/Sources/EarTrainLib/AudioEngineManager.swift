@@ -92,6 +92,10 @@ public final class AudioEngineManager: ObservableObject {
     private var detector: PitchDetector?
     private var configChangeObserver: NSObjectProtocol?
     private var micTapInstalled = false
+    // Ref-count so TunerView's onDisappear doesn't tear down a tap that an
+    // exercise view just installed (SwiftUI fires new-view onAppear before
+    // old-view onDisappear, so both can hold the tap simultaneously in flight).
+    private var micTapRefCount = 0
 
     /// Tap buffer size — 4096 samples ≈ 93 ms at 44100 Hz.
     private let bufferSize: AVAudioFrameCount = 4096
@@ -106,11 +110,16 @@ public final class AudioEngineManager: ObservableObject {
         let eng = AVAudioEngine()
 
         // Use the output node's sample rate for tone players.
-        // We deliberately do NOT touch eng.inputNode here — accessing it claims
-        // the microphone even without a tap, turning on the orange indicator.
-        // All input-node work is deferred to enableMicTap().
         let outputRate = eng.outputNode.outputFormat(forBus: 0).sampleRate
         let sampleRate = Float(outputRate > 0 ? outputRate : 44100)
+
+        // Pre-configure the input node BEFORE eng.start(). Accessing inputNode
+        // on an already-running engine triggers AVAudioEngineConfigurationChange
+        // (CoreAudio stops the engine to rewire the graph), which kills the
+        // CI Bluetooth keep-alive and breaks output audio. Pre-warming it here
+        // is safe: the orange mic indicator only fires when a tap is installed
+        // on a running engine, not from touching the node object.
+        _ = eng.inputNode
 
         // --- Tone output (must attach before engine.start()) ---
         intervalPlayer.attach(to: eng, sampleRate: sampleRate)
@@ -155,6 +164,7 @@ public final class AudioEngineManager: ObservableObject {
     /// This is also the first point we touch `inputNode`, so the mic is never
     /// claimed until an exercise that actually needs it is active.
     public func enableMicTap() {
+        micTapRefCount += 1
         guard let eng = engine, !micTapInstalled else { return }
 
         // Apply preferred input device now (deferred from start()).
@@ -193,6 +203,8 @@ public final class AudioEngineManager: ObservableObject {
 
     /// Remove the hardware mic tap. Clears amplitude/pitch readings.
     public func disableMicTap() {
+        micTapRefCount = max(0, micTapRefCount - 1)
+        guard micTapRefCount == 0 else { return }
         guard let eng = engine, micTapInstalled else { return }
         eng.inputNode.removeTap(onBus: 0)
         micTapInstalled = false
@@ -232,6 +244,16 @@ public final class AudioEngineManager: ObservableObject {
         stop()
         start()
         if tapWasInstalled { enableMicTap() }
+    }
+
+    // MARK: - Tuner chime
+
+    /// Two-note ascending chime (E5 → A5) played through the sine wave player.
+    /// Always uses sine regardless of timbre — a brief, clean confirmation ping.
+    public func playInTuneChime() async {
+        await intervalPlayer.play(hz: 659.25, duration: 0.10, amplitude: 0.35)
+        try? await Task.sleep(for: .seconds(0.07))
+        await intervalPlayer.play(hz: 880.00, duration: 0.18, amplitude: 0.30)
     }
 
     // MARK: - Timbre-routed playback
@@ -283,6 +305,7 @@ public final class AudioEngineManager: ObservableObject {
         if micTapInstalled {
             engine?.inputNode.removeTap(onBus: 0)
             micTapInstalled = false
+            micTapRefCount = 0
         }
         engine?.stop()
         engine = nil

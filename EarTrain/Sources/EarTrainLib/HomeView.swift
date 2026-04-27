@@ -20,6 +20,7 @@ public struct HomeView: View {
         ScrollView {
             VStack(spacing: 28) {
                 header
+                recommendationCard
                 if store.stats.totalSessions > 0 || store.hasContourData {
                     statsRow
                 }
@@ -52,6 +53,53 @@ public struct HomeView: View {
                 .foregroundColor(EarTrainColors.textSecondary)
         }
         .padding(.top, 8)
+    }
+
+    // MARK: - Recommendation card
+
+    private var recommendationCard: some View {
+        let rec = store.todayRecommendation
+        let done = store.practicedToday
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                if done {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(EarTrainColors.success)
+                }
+                Text(done ? "SESSION COMPLETE" : "TODAY'S FOCUS")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundColor(done ? EarTrainColors.success : EarTrainColors.accent)
+            }
+
+            Text(done ? "Nice work today." : rec.headline)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(EarTrainColors.textPrimary)
+
+            Text(done ? "Come back tomorrow and keep the streak going." : rec.reason)
+                .font(.system(size: 13))
+                .foregroundColor(EarTrainColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !done {
+                Button(rec.cta) { activeMode = rec.mode }
+                    .buttonStyle(AccentButtonStyle())
+                    .padding(.top, 4)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(EarTrainColors.surface)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(
+                    done ? EarTrainColors.success.opacity(0.25)
+                         : EarTrainColors.accent.opacity(0.25),
+                    lineWidth: 1.5
+                )
+        )
     }
 
     // MARK: - Stats
@@ -95,7 +143,7 @@ public struct HomeView: View {
                 .foregroundColor(EarTrainColors.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            ForEach([AppMode.contour, .identification, .intervals], id: \.self) { m in
+            ForEach([AppMode.contour, .intervals, .identification], id: \.self) { m in
                 modeCard(m)
             }
         }
@@ -141,6 +189,8 @@ public struct HomeView: View {
             Text(eligible ? "Drill My Misses" : "Drill My Misses (need more data)")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(eligible ? EarTrainColors.accent : EarTrainColors.textDisabled)
+                .contentShape(Rectangle())
+                .onTapGesture { if eligible { activeMode = .intervals } }
         }
     }
 
@@ -222,7 +272,7 @@ private struct SessionStartSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             sectionLabel("Exercise")
             VStack(spacing: 6) {
-                ForEach([AppMode.contour, .identification, .intervals], id: \.self) { m in
+                ForEach([AppMode.contour, .intervals, .identification], id: \.self) { m in
                     modeRow(m)
                 }
             }

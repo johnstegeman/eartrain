@@ -33,7 +33,9 @@ public final class ExerciseViewModel: ObservableObject, DifficultyAdjustable {
     @Published public var correctTrials: Int = 0
 
     /// 1 = easiest (.close counts as .correct, loose detection), 5 = hardest (tight).
-    @Published public var difficultyLevel: Int = 3
+    @Published public var difficultyLevel: Int = 3 {
+        didSet { UserDefaults.standard.set(difficultyLevel, forKey: "difficultyLevel_intervals") }
+    }
 
     @Published public var timeRemainingSeconds: Int? = nil
     @Published public var sessionExpired: Bool = false
@@ -93,6 +95,8 @@ public final class ExerciseViewModel: ObservableObject, DifficultyAdjustable {
 
     public init(audio: any AudioPlaying & MicListening) {
         self.audio = audio
+        let saved = UserDefaults.standard.integer(forKey: "difficultyLevel_intervals")
+        if saved > 0 { difficultyLevel = saved }
     }
 
     // MARK: - Session lifecycle
