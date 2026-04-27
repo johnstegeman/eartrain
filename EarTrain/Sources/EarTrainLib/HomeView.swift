@@ -17,21 +17,19 @@ public struct HomeView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(spacing: 28) {
-                header
-                recommendationCard
-                if store.stats.totalSessions > 0 || store.hasContourData {
-                    statsRow
-                }
-                modeCards
-                ctaSection
+        VStack(spacing: 16) {
+            header
+            recommendationCard
+            if store.stats.totalSessions > 0 || store.hasContourData {
+                statsRow
             }
-            .padding(32)
-            .frame(maxWidth: 480)
-            .frame(maxWidth: .infinity)
+            modeCards
+            ctaSection
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
+        .frame(maxWidth: 480)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(EarTrainColors.bg)
         .onAppear { store.reload() }
         .sheet(isPresented: $showingStartSheet) {
@@ -43,16 +41,18 @@ public struct HomeView: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(spacing: 10) {
-            AudiePNGImage(size: 88)
-            Text("Audie")
-                .font(.system(size: 36, weight: .black))
-                .foregroundColor(EarTrainColors.textPrimary)
-            Text("Your ear training companion")
-                .font(.system(size: 14))
-                .foregroundColor(EarTrainColors.textSecondary)
+        HStack(spacing: 12) {
+            AudiePNGImage(size: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Audie")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(EarTrainColors.textPrimary)
+                Text("Your ear training companion")
+                    .font(.system(size: 12))
+                    .foregroundColor(EarTrainColors.textSecondary)
+            }
+            Spacer()
         }
-        .padding(.top, 8)
     }
 
     // MARK: - Recommendation card
