@@ -39,6 +39,8 @@ public struct ExerciseView: View {
                         controls
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .overlay(alignment: .bottom) {
                     AudieChatPanel(companion: companion)
                 }
             }

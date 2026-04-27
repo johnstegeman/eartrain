@@ -40,6 +40,8 @@ public struct IdentificationView: View {
                         answerButtons
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .overlay(alignment: .bottom) {
                     AudieChatPanel(companion: companion)
                 }
             }
