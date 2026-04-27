@@ -130,6 +130,8 @@ public final class ContourViewModel: ObservableObject, DifficultyAdjustable {
     private var rootHz: Float = 440
     private var secondHz: Float = 660
     private var semitones: Int = 7
+    /// Counts replays on the current wrong answer; resets on each new trial.
+    private var wrongReplayCount: Int = 0
     private var currentTask: Task<Void, Never>?
     private var timerTask:   Task<Void, Never>?
     private var timerExpired = false
@@ -231,6 +233,7 @@ public final class ContourViewModel: ObservableObject, DifficultyAdjustable {
 
     public func startExercise() {
         currentTask?.cancel()
+        wrongReplayCount = 0
         phase = .playing
         let (root, second, st, contour) = generatePair()
         rootHz = root
@@ -260,6 +263,29 @@ public final class ContourViewModel: ObservableObject, DifficultyAdjustable {
             guard !Task.isCancelled else { return }
             phase = .awaitingAnswer
         }
+    }
+
+    /// Called by the view on each "Hear it again" tap for a wrong answer.
+    /// Returns true when the replay threshold is reached and the view should
+    /// ask the companion to reveal the note names.
+    @discardableResult
+    public func recordWrongReplay() -> Bool {
+        wrongReplayCount += 1
+        return wrongReplayCount >= 2
+    }
+
+    /// The names of the first and second notes played in the current pair.
+    /// Nil outside of a result phase.
+    public var currentNoteNames: (first: String, second: String)? {
+        guard case .result = phase else { return nil }
+        return (NoteConverter.name(fromHz: rootHz),
+                NoteConverter.name(fromHz: secondHz))
+    }
+
+    /// MIDI numbers of the current pair, lower note first. Used for flagging.
+    public var currentNoteMidiPair: (note1: Int, note2: Int) {
+        (NoteConverter.midiNote(fromHz: min(rootHz, secondHz)),
+         NoteConverter.midiNote(fromHz: max(rootHz, secondHz)))
     }
 
     /// Replay the pair after a wrong answer so the user can hear what they missed.

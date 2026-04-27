@@ -145,7 +145,18 @@ public struct ContourView: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(EarTrainColors.accent)
                             .contentShape(Rectangle())
-                            .onTapGesture { vm.replayAfterResult() }
+                            .onTapGesture {
+                                vm.replayAfterResult()
+                                if vm.recordWrongReplay(), let notes = vm.currentNoteNames {
+                                    let midi = vm.currentNoteMidiPair
+                                    companion.revealContourNotes(
+                                        firstNote: notes.first,
+                                        secondNote: notes.second,
+                                        note1Midi: midi.note1,
+                                        note2Midi: midi.note2
+                                    )
+                                }
+                            }
                     }
                 }
                 .transition(.opacity)
