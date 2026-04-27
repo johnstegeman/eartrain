@@ -97,6 +97,29 @@ public final class ProgressStore: ObservableObject {
         stats.contour.values.contains { $0.values.contains { $0.total > 0 } }
     }
 
+    /// Total contour trials logged across all intervals and registers.
+    public var contourTotalTrials: Int {
+        contourIntervals.reduce(0) { $0 + (contourCounts(for: $1)?.total ?? 0) }
+    }
+
+    /// Overall contour accuracy across all intervals and registers. Nil if no data.
+    public var contourOverallAccuracy: Double? {
+        let pairs = contourIntervals.compactMap { contourCounts(for: $0) }
+        let total   = pairs.reduce(0) { $0 + $1.total }
+        let correct = pairs.reduce(0) { $0 + $1.correct }
+        guard total > 0 else { return nil }
+        return Double(correct) / Double(total)
+    }
+
+    /// Contour is mastered when the user has enough trials at strong accuracy.
+    /// Thresholds: ≥ 30 trials AND ≥ 75% accuracy.
+    /// Note: does not yet gate on difficulty level — difficulty-aware mastery
+    /// (requiring difficulty 5) will be added when LessonRunner ships (Phase 2).
+    public var hasContourMastery: Bool {
+        guard let acc = contourOverallAccuracy else { return false }
+        return contourTotalTrials >= 30 && acc >= 0.75
+    }
+
     /// Top N interval × register buckets ranked by error rate, requiring ≥ 5 trials each.
     /// Used on the End of Session screen to surface the biggest weak spots.
     public func topConfusionBuckets(limit: Int = 2)
@@ -147,21 +170,58 @@ public final class ProgressStore: ObservableObject {
         return Calendar.current.isDateInToday(last)
     }
 
-    /// What Audie recommends doing right now, derived from the user's gap analysis.
+    /// What Audie recommends doing right now, based on where the user is in the curriculum.
+    ///
+    /// Curriculum ladder: Contour → Interval Identification → Interval Playback
+    /// A stage advances only when the previous one is mastered. Users are never
+    /// pushed forward prematurely — mastery requires both enough trials and strong accuracy.
+    ///
+    /// Difficulty-gated mastery (requiring difficulty 5) is a Phase 2 addition
+    /// once LessonRunner tracks per-trial difficulty.
     public var todayRecommendation: TodayRecommendation {
-        let hasIntervalData = !stats.matrix.isEmpty
 
-        // New user: start simple
-        if stats.totalSessions == 0 {
+        // ── Stage 1: Contour ──────────────────────────────────────────────────
+        // Stay here until mastered (≥ 30 trials, ≥ 75% accuracy).
+
+        if !hasContourMastery {
+            let n = contourTotalTrials
+            if n == 0 {
+                return TodayRecommendation(
+                    mode: .contour,
+                    headline: "Start with Contour",
+                    reason: "Hearing whether a note goes up or down is the foundation. Start here.",
+                    cta: "Begin"
+                )
+            }
+            let accStr = contourOverallAccuracy.map { "\(Int($0 * 100))% accuracy" } ?? "keep going"
+            let needed = max(0, 30 - n)
+            let progressNote = needed > 0
+                ? "\(n) trial\(n == 1 ? "" : "s") in, \(accStr). ~\(needed) more to reach mastery."
+                : "\(n) trials in, \(accStr). Push accuracy above 75% to advance."
             return TodayRecommendation(
                 mode: .contour,
-                headline: "Start with Contour",
-                reason: "Hearing whether a note goes up or down is the foundation. Start here.",
-                cta: "Begin"
+                headline: "Keep Building Contour",
+                reason: progressNote,
+                cta: "Continue"
             )
         }
 
-        // Specific drillable weakness (≥5 trials, >35% errors)
+        // ── Stage 2: Interval Identification ─────────────────────────────────
+        // Learn what intervals sound like before playing them back.
+        // Gate: contour mastered AND no identification/interval data yet.
+
+        if stats.matrix.isEmpty {
+            return TodayRecommendation(
+                mode: .identification,
+                headline: "Name the Intervals",
+                reason: "Contour is solid. Now learn what each interval sounds like before playing it back.",
+                cta: "Start"
+            )
+        }
+
+        // ── Stage 3: Interval Playback — confusion-matrix targeting ──────────
+
+        // Specific drillable weakness (≥ 5 trials, > 35% error rate)
         if let hit = topConfusionBuckets(limit: 1).first, hit.errorRate > 0.35 {
             let pct = Int(hit.errorRate * 100)
             return TodayRecommendation(
@@ -172,33 +232,12 @@ public final class ProgressStore: ObservableObject {
             )
         }
 
-        // Has contour data but hasn't touched intervals yet
-        if !hasIntervalData {
-            return TodayRecommendation(
-                mode: .intervals,
-                headline: "Try Interval Training",
-                reason: "You've built pitch direction with Contour — time to name the intervals.",
-                cta: "Start"
-            )
-        }
-
-        // Has intervals but hasn't tried contour
-        if !hasContourData {
-            return TodayRecommendation(
-                mode: .contour,
-                headline: "Try Contour Training",
-                reason: "Trains pitch direction directly — complements your interval work.",
-                cta: "Try It"
-            )
-        }
-
-        // Below 70% accuracy: keep drilling intervals
         if let acc = overallAccuracy, acc < 0.70 {
             return TodayRecommendation(
                 mode: .intervals,
                 headline: "Keep Drilling Intervals",
                 reason: "Accuracy at \(Int(acc * 100))% — consistent reps is how it climbs.",
-                cta: "Start Session"
+                cta: "Continue"
             )
         }
 
@@ -206,7 +245,7 @@ public final class ProgressStore: ObservableObject {
             mode: .intervals,
             headline: "Keep Building",
             reason: "Steady daily practice compounds. Even 10 minutes moves the needle.",
-            cta: "Start Session"
+            cta: "Continue"
         )
     }
 
